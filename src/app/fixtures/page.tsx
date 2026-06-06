@@ -87,8 +87,8 @@ export default async function FixturesPage() {
       );
 
     groupStandings = computeGroupsFromFixtures(groupFixtures);
-  } catch {
-    // DB not reachable — render empty state.
+  } catch (err) {
+    console.error("[fixtures/page] DB error:", err);
   }
 
   return <FixturesClient gameweeks={gameweeks} groupStandings={groupStandings} />;
