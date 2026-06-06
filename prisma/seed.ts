@@ -9,10 +9,9 @@
 // Idempotent-ish: clears the stub tables first, then re-inserts.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { PrismaClient, type Position } from "@prisma/client";
+import { type Position } from "@prisma/client";
+import { db } from "../src/lib/db";
 import { GAMEWEEK_DEFS } from "../src/lib/gameweeks";
-
-const db = new PrismaClient();
 
 // price is integer tenths-of-a-million: 130 = 13.0M (see schema note).
 const TEAMS = [

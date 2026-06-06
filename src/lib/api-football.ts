@@ -57,11 +57,17 @@ export interface ApiFixture {
   goals: { home: number | null; away: number | null };
 }
 
-export interface ApiPlayerEntry {
-  player: { id: number; name: string; photo?: string };
-  statistics: Array<{
-    team: { id: number };
-    games: { position?: string | null };
+// Official tournament squad per team — /players/squads?team=X.
+// This is the correct roster source pre-tournament: /players?league=...&season=...
+// returns 0 until matches generate stats, but squads are populated now.
+export interface ApiSquad {
+  team: { id: number; name: string };
+  players: Array<{
+    id: number;
+    name: string;
+    number?: number | null;
+    position?: string | null; // "Goalkeeper" | "Defender" | "Midfielder" | "Attacker"
+    photo?: string;
   }>;
 }
 
@@ -92,11 +98,9 @@ export const apiFootball = {
   rounds: () =>
     get<string>(`/fixtures/rounds?league=${WORLD_CUP_LEAGUE}&season=${SEASON}`),
 
-  // Player pool is paginated — caller loops pages until empty.
-  playersPage: (page: number) =>
-    get<ApiPlayerEntry>(
-      `/players?league=${WORLD_CUP_LEAGUE}&season=${SEASON}&page=${page}`,
-    ),
+  // Official 26-man squad for one team — the roster source for the player pool.
+  // Loop over all 48 teams (one request each) to build the full pool.
+  squad: (teamId: number) => get<ApiSquad>(`/players/squads?team=${teamId}`),
 
   // Per-fixture player stats — the settlement feed.
   fixturePlayers: (fixtureId: number) =>

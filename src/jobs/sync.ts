@@ -111,39 +111,40 @@ export async function syncFixtures() {
   console.log(`✓ fixtures: ${synced} (of ${fixtures.length} returned)`);
 }
 
-// ── Players: paginated pool. Price is left at 0 — pricing is a manual step. ──
+// ── Players: loop the 48 teams and pull each official 26-man squad.
+// NOTE: /players?league=...&season=... returns 0 before any match is played
+// (it's stats-driven), so we use /players/squads?team=X which is populated now.
+// Price is left at 0 — hand-pricing is a manual step before launch (§6).
 export async function syncPlayers() {
-  const teamIdByApi = new Map(
-    (await db.team.findMany()).map((t) => [t.apiTeamId, t.id]),
-  );
-  let page = 1;
+  const teams = await db.team.findMany();
   let total = 0;
-  for (;;) {
-    const entries = await apiFootball.playersPage(page);
-    if (entries.length === 0) break;
-    for (const e of entries) {
-      const stat = e.statistics?.[0];
-      const teamId = stat ? teamIdByApi.get(stat.team.id) : undefined;
-      if (!teamId) continue;
-      const pos = normalizePosition(stat?.games.position);
+  for (const team of teams) {
+    let squads;
+    try {
+      squads = await apiFootball.squad(team.apiTeamId);
+    } catch (e) {
+      console.error(`  ✗ squad ${team.name}:`, (e as Error).message);
+      continue;
+    }
+    const players = squads[0]?.players ?? [];
+    for (const p of players) {
+      const pos = normalizePosition(p.position);
       await db.player.upsert({
-        where: { apiPlayerId: e.player.id },
-        update: { name: e.player.name, position: pos, photoUrl: e.player.photo ?? null, teamId },
+        where: { apiPlayerId: p.id },
+        update: { name: p.name, position: pos, photoUrl: p.photo ?? null, teamId: team.id },
         create: {
-          apiPlayerId: e.player.id,
-          name: e.player.name,
+          apiPlayerId: p.id,
+          name: p.name,
           position: pos,
-          price: 0, // TODO: set via pricing step before launch
-          photoUrl: e.player.photo ?? null,
-          teamId,
+          price: 0, // TODO: hand-tier prices before launch (§6)
+          photoUrl: p.photo ?? null,
+          teamId: team.id,
         },
       });
       total++;
     }
-    page++;
-    if (page > 50) break; // safety cap
   }
-  console.log(`✓ players: ${total} (price=0 until pricing step)`);
+  console.log(`✓ players: ${total} across ${teams.length} squads (price=0 until pricing step)`);
 }
 
 function normalizePosition(p?: string | null): Position {
