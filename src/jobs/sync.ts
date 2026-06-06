@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { db } from "@/lib/db";
-import { apiFootball, type ApiFixture } from "@/lib/api-football";
+import { apiFootball, type ApiFixture, type ApiStanding } from "@/lib/api-football";
 import {
   GAMEWEEK_DEFS,
   bucketForKickoff,
@@ -157,15 +157,36 @@ function normalizePosition(p?: string | null): Position {
   }
 }
 
+// ── Standings: populate Team.group ("Group A" … "Group L") from /standings. ──
+// Run once after the draw; safe to re-run (idempotent updates).
+export async function syncStandings() {
+  const data = await apiFootball.standings();
+  let updated = 0;
+  for (const row of data as unknown as ApiStanding[]) {
+    for (const group of row.league.standings) {
+      for (const entry of group) {
+        if (!entry.group.startsWith("Group ")) continue; // skip third-place ranking
+        await db.team.updateMany({
+          where: { apiTeamId: entry.team.id },
+          data: { group: entry.group },
+        });
+        updated++;
+      }
+    }
+  }
+  console.log(`✓ standings: ${updated} team group labels updated`);
+}
+
 export async function fullSync() {
   await syncGameweeks();
   await syncTeams();
   await syncFixtures();
   await syncPlayers();
+  await syncStandings();
   console.log("✓ full sync complete");
 }
 
-// CLI entrypoint: `npm run sync -- [teams|fixtures|players|gameweeks]`
+// CLI entrypoint: `npm run sync -- [teams|fixtures|players|gameweeks|standings]`
 if (process.argv[1]?.endsWith("sync.ts") || process.argv[1]?.endsWith("sync.js")) {
   const which = process.argv[2];
   const run =
@@ -173,6 +194,7 @@ if (process.argv[1]?.endsWith("sync.ts") || process.argv[1]?.endsWith("sync.js")
     : which === "fixtures" ? syncFixtures
     : which === "players" ? syncPlayers
     : which === "gameweeks" ? syncGameweeks
+    : which === "standings" ? syncStandings
     : fullSync;
   run()
     .then(() => process.exit(0))

@@ -108,6 +108,7 @@ model Team {
   name       String
   country    String
   logoUrl    String?
+  group      String?  // e.g. "Group A" … "Group L" — from /standings API
   eliminated Boolean @default(false)
 
   players   Player[]

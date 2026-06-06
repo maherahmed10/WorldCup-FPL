@@ -61,6 +61,10 @@ export interface FixtureForGroup {
   awayTeamId: string;
   homeTeamName: string;
   awayTeamName: string;
+  // Real group label from Team.group ("Group A" … "Group L") when available.
+  // Falls back to union-find clustering + alphabetical labeling if null.
+  homeTeamGroup: string | null;
+  awayTeamGroup: string | null;
   homeScore: number | null;
   awayScore: number | null;
   status: string; // "FINISHED" | other
@@ -72,48 +76,64 @@ export interface GroupStandings {
 }
 
 export function computeGroupsFromFixtures(fixtures: FixtureForGroup[]): GroupStandings[] {
-  const parent = new Map<string, string>();
   const teamNames = new Map<string, string>();
-
-  function find(x: string): string {
-    if (!parent.has(x)) parent.set(x, x);
-    let root = x;
-    while (parent.get(root) !== root) root = parent.get(root)!;
-    // path compression
-    let cur = x;
-    while (cur !== root) {
-      const next = parent.get(cur)!;
-      parent.set(cur, root);
-      cur = next;
-    }
-    return root;
-  }
-
-  function union(x: string, y: string) {
-    const px = find(x);
-    const py = find(y);
-    if (px !== py) parent.set(px, py);
-  }
+  const teamGroups = new Map<string, string>(); // teamId → "Group A" etc.
 
   for (const f of fixtures) {
     teamNames.set(f.homeTeamId, f.homeTeamName);
     teamNames.set(f.awayTeamId, f.awayTeamName);
-    union(f.homeTeamId, f.awayTeamId);
+    if (f.homeTeamGroup) teamGroups.set(f.homeTeamId, f.homeTeamGroup);
+    if (f.awayTeamGroup) teamGroups.set(f.awayTeamId, f.awayTeamGroup);
   }
 
-  // Cluster teams by root
+  // ── Path 1: real group labels from Team.group ────────────────────────────
+  const hasRealLabels = teamGroups.size > 0;
+
+  // Build group → teamIds mapping
   const clusters = new Map<string, string[]>();
-  for (const teamId of teamNames.keys()) {
-    const root = find(teamId);
-    const list = clusters.get(root) ?? [];
-    list.push(teamId);
-    clusters.set(root, list);
+
+  if (hasRealLabels) {
+    for (const [teamId, label] of teamGroups) {
+      const list = clusters.get(label) ?? [];
+      list.push(teamId);
+      clusters.set(label, list);
+    }
+    // Also cover any teams present in fixtures but missing a group label
+    for (const teamId of teamNames.keys()) {
+      if (!teamGroups.has(teamId)) {
+        const list = clusters.get("__unknown__") ?? [];
+        list.push(teamId);
+        clusters.set("__unknown__", list);
+      }
+    }
+  } else {
+    // ── Path 2: union-find fallback when group labels absent ───────────────
+    const parent = new Map<string, string>();
+    const find = (x: string): string => {
+      if (!parent.has(x)) parent.set(x, x);
+      let root = x;
+      while (parent.get(root) !== root) root = parent.get(root)!;
+      let cur = x;
+      while (cur !== root) { const next = parent.get(cur)!; parent.set(cur, root); cur = next; }
+      return root;
+    };
+    for (const f of fixtures) {
+      const px = find(f.homeTeamId), py = find(f.awayTeamId);
+      if (px !== py) parent.set(px, py);
+    }
+    for (const teamId of teamNames.keys()) {
+      const root = find(teamId);
+      const list = clusters.get(root) ?? [];
+      list.push(teamId);
+      clusters.set(root, list);
+    }
   }
 
   // Compute W/D/L/GF/GA from FINISHED fixtures
   const stats = new Map<string, GroupTableRow>();
-  const getStats = (id: string, name: string): GroupTableRow =>
-    stats.get(id) ?? { teamId: id, teamName: name, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
+  const blank = (id: string, name: string): GroupTableRow => ({
+    teamId: id, teamName: name, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0,
+  });
 
   for (const f of fixtures) {
     if (f.status !== "FINISHED" || f.homeScore == null || f.awayScore == null) continue;
@@ -121,10 +141,8 @@ export function computeGroupsFromFixtures(fixtures: FixtureForGroup[]): GroupSta
       [f.homeTeamId, f.homeTeamName, f.homeScore, f.awayScore],
       [f.awayTeamId, f.awayTeamName, f.awayScore, f.homeScore],
     ] as [string, string, number, number][]) {
-      const s = { ...getStats(id, name) };
-      s.played++;
-      s.goalsFor += gf;
-      s.goalsAgainst += ga;
+      const s = { ...(stats.get(id) ?? blank(id, name)) };
+      s.played++; s.goalsFor += gf; s.goalsAgainst += ga;
       if (gf > ga) { s.won++; s.points += 3; }
       else if (gf === ga) { s.drawn++; s.points += 1; }
       else s.lost++;
@@ -132,20 +150,14 @@ export function computeGroupsFromFixtures(fixtures: FixtureForGroup[]): GroupSta
     }
   }
 
-  // Sort groups by alphabetically earliest team name for deterministic labeling
-  const groups = Array.from(clusters.values())
-    .map((ids) =>
-      ids.map((id) => stats.get(id) ?? getStats(id, teamNames.get(id) ?? id))
-    )
-    .sort((a, b) => {
-      const minA = [...a].sort((x, y) => x.teamName.localeCompare(y.teamName))[0].teamName;
-      const minB = [...b].sort((x, y) => x.teamName.localeCompare(y.teamName))[0].teamName;
-      return minA.localeCompare(minB);
-    });
+  // Sort group entries, label alphabetically when using fallback
+  const groupEntries = Array.from(clusters.entries())
+    .filter(([label]) => label !== "__unknown__")
+    .sort(([a], [b]) => a.localeCompare(b));
 
-  const LABELS = "ABCDEFGHIJKL";
-  return groups.map((rows, i) => ({
-    label: `Group ${LABELS[i] ?? String(i + 1)}`,
-    rows: sortGroupStandings(rows),
+  const FALLBACK = "ABCDEFGHIJKL";
+  return groupEntries.map(([rawLabel, ids], i) => ({
+    label: hasRealLabels ? rawLabel : `Group ${FALLBACK[i] ?? String(i + 1)}`,
+    rows: sortGroupStandings(ids.map((id) => stats.get(id) ?? blank(id, teamNames.get(id) ?? id))),
   }));
 }

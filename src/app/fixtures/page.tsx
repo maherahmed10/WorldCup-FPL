@@ -7,7 +7,7 @@ import { computeGroupsFromFixtures, type FixtureForGroup } from "@/lib/leagues";
 import { FixturesClient, type GameweekData } from "@/components/FixturesClient";
 
 // Local shape for the Prisma query result (avoids implicit-any in callbacks).
-interface TeamRow { id: string; name: string; logoUrl: string | null }
+interface TeamRow { id: string; name: string; logoUrl: string | null; group: string | null }
 interface FixtureRow {
   id: string;
   kickoff: Date;
@@ -39,8 +39,8 @@ export default async function FixturesPage() {
         fixtures: {
           orderBy: { kickoff: "asc" },
           include: {
-            homeTeam: { select: { id: true, name: true, logoUrl: true } },
-            awayTeam: { select: { id: true, name: true, logoUrl: true } },
+            homeTeam: { select: { id: true, name: true, logoUrl: true, group: true } },
+            awayTeam: { select: { id: true, name: true, logoUrl: true, group: true } },
           },
         },
       },
@@ -68,8 +68,8 @@ export default async function FixturesPage() {
       })),
     }));
 
-    // Derive group standings from group-stage fixtures (no group label in DB,
-    // so we cluster by union-find on who plays whom — see lib/leagues.ts).
+    // Build group standings from group-stage fixtures.
+    // homeTeamGroup/awayTeamGroup come from Team.group (populated via syncStandings).
     const groupFixtures: FixtureForGroup[] = rows
       .filter((gw: GameweekRow) => gw.roundType === "GROUP")
       .flatMap((gw: GameweekRow) =>
@@ -78,6 +78,8 @@ export default async function FixturesPage() {
           awayTeamId: f.awayTeam.id,
           homeTeamName: f.homeTeam.name,
           awayTeamName: f.awayTeam.name,
+          homeTeamGroup: f.homeTeam.group,
+          awayTeamGroup: f.awayTeam.group,
           homeScore: f.homeScore,
           awayScore: f.awayScore,
           status: f.status,

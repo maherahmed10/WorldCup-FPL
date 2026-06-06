@@ -95,9 +95,8 @@ export function FixturesClient({ gameweeks, groupStandings }: Props) {
               month: "short",
               hour: "2-digit",
               minute: "2-digit",
-              timeZone: "UTC",
             })}{" "}
-            UTC
+            local time
           </p>
 
           {/* Fixture list */}
@@ -182,10 +181,10 @@ function FixtureRow({ fixture: f, divider }: { fixture: FixtureData; divider: bo
         ) : (
           <span className="text-xs">
             <div>
-              {kickoff.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}
+              {kickoff.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
             </div>
             <div className="font-semibold" style={{ color: "var(--text-2)" }}>
-              {kickoff.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}
+              {kickoff.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
             </div>
           </span>
         )}
