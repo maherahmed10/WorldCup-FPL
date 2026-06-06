@@ -7,20 +7,43 @@ models it touches, and acceptance criteria for the first milestone.
 > Foundation already done (on `main`): Next.js + Prisma + Supabase, the full data
 > model, the API-Football sync + settlement jobs, the FPL scoring core (tested),
 > and the design ported into `globals.css`. Everyone builds on top of this.
+>
+> **✅ The shared Supabase DB is already loaded with REAL World Cup data:**
+> **48 teams · 1,248 players · 72 fixtures · 8 gameweeks.** You do NOT need Docker
+> and you do NOT need to run `seed` or `sync` — just connect and build.
 
-## Shared setup (everyone does this first, ~15 min)
+## Shared setup (everyone does this first, ~10 min)
 
 ```bash
 git clone https://github.com/maherahmed10/WorldCup-FPL.git
 cd WorldCup-FPL
 npm install
-cp .env.example .env.local      # paste the shared Supabase + API keys (group chat)
-npm run db:generate
-npm run seed                    # stub data so you're not blocked on the live feed
+cp .env.example .env.local      # then paste the shared values Youssef sends you (DM, not the repo)
+npm run db:generate             # generates the Prisma client from the schema
 npm run dev                     # http://localhost:3000
+npm run db:studio               # optional: browse the 1,248 real players in the DB
 ```
 
+**The `.env.local` values come from Youssef privately** (Supabase URLs + keys, API
+key). They are NOT in the repo — `.env.local` is git-ignored on purpose. Never
+commit it or paste secrets into the repo / a logged channel.
+
+> Heads-up: every `Player.price` is currently **0** — pricing is a pre-launch step
+> (build plan §6). Build the picker/list against price=0; real prices backfill later.
+
 Open `design/index.html` in a browser to see the clickable target design.
+
+## Sanity check — confirm your setup works (everyone)
+
+After setup, run this. If it prints the counts, you're fully connected to the real DB:
+
+```bash
+npm run check          # prints: teams 48 · players 1248 · fixtures 72
+```
+
+(If `npm run check` errors with a DB connection problem, your `.env.local` is wrong
+— most likely `DIRECT_URL` must use the **pooler** host on port 5432, not
+`db.<ref>.supabase.co`. Ask Youssef.)
 
 ---
 
@@ -45,6 +68,18 @@ others can mount their screens inside it.
       rule enforced, captain/vice select → saves `Squad` + `SquadPlayer`
 - [ ] Builds, lints, merged to `main`
 
+**How you test this lane:**
+- [ ] **Unit test the squad-validation rules** (pure functions, no DB). Put them in
+      `src/lib/squad-rules.ts` + `src/lib/squad-rules.test.ts`, run with `npm test`.
+      Cover: exactly 15 players (2 GK / 5 DEF / 5 MID / 3 FWD), total price ≤ 100.0,
+      **max 3 per country**, valid starting XI formation (1 GK; 3–5 DEF; 2–5 MID;
+      1–3 FWD = 11). These mirror the FPL rules and the existing `scoring.test.ts`.
+- [ ] **Manual:** log in (real Supabase Auth), confirm a `User` row appears in
+      `npm run db:studio`. Build a squad, save it, confirm `Squad` + 15 `SquadPlayer`
+      rows are written. Try to break the rules (4 from one country, over budget) →
+      the UI must block it.
+- [ ] `npm run build` passes before merge.
+
 > ⚠️ The app shell + `layout.tsx` are shared files — land the shell early in one
 > focused PR so B and C can branch off it.
 
@@ -67,6 +102,18 @@ others can mount their screens inside it.
       BTTS, anytime scorer), a stake balance, a bet slip that writes `Bet` rows
 - [ ] Open bets + settled bets sections (`design/screens_predict.jsx`)
 - [ ] Builds, lints, merged to `main`
+
+**How you test this lane:**
+- [ ] **Unit test the bet math** (pure functions, no DB). Put `payout(stake,
+      multiplier, won)` and any stake-balance logic in `src/lib/betting.ts` +
+      `src/lib/betting.test.ts`, run with `npm test`. Cover: won → `stake *
+      multiplier`, lost → 0, can't stake more than balance, void → stake returned.
+- [ ] **Manual — Players:** load `/players`, confirm **1,248 real players** render
+      (Mbappé, Messi, etc. — note prices show 0 until pricing lands; that's fine).
+      Filter by position/country/search and confirm the list narrows correctly.
+- [ ] **Manual — Predictions:** place a bet → confirm a `Bet` row is written
+      (`npm run db:studio`), balance decreases, the bet shows in "open bets".
+- [ ] `npm run build` passes before merge.
 
 > The player-prop markets (scorer/assist/card) are **our own markets with fixed
 > point values** — see build plan §7. Match markets can use placeholder odds for
@@ -92,6 +139,18 @@ others can mount their screens inside it.
       `Gameweek`.
 - [ ] Builds, lints, merged to `main`
 
+**How you test this lane:**
+- [ ] **Unit test pure helpers** (no DB): join-code generation (unique, right
+      format) and standings sort (points → goal difference → goals for). Put them
+      in `src/lib/leagues.ts` + `src/lib/leagues.test.ts`, run with `npm test`.
+- [ ] **Manual — Leagues:** create a league → confirm a `League` row + your
+      `LeagueMember` row in `npm run db:studio`. From a second account, join by the
+      code → confirm a second `LeagueMember` row and both appear in the standings.
+- [ ] **Manual — Fixtures:** load `/fixtures`, confirm the **72 real fixtures**
+      render grouped by gameweek (first one: Mexico vs South Africa, Jun 11), with
+      correct team names/flags.
+- [ ] `npm run build` passes before merge.
+
 ---
 
 ## Cross-cutting (whoever finishes first / pairs up)
@@ -99,10 +158,30 @@ others can mount their screens inside it.
 - **Settlement → points pipeline:** `src/jobs/settle.ts` already computes
   per-player `fantasyPoints`. Next: aggregate to per-user GW totals + a
   leaderboard query. Touches everyone — pair on it.
-- **Real API wiring:** run `npm run verify-api`, then `npm run sync` once the key
-  + plan are confirmed (see README "Will the API work?").
+- **✅ Real API wiring is DONE:** the shared DB already has 48 teams / 1,248
+  players / 72 fixtures. To refresh later (new fixtures, post-match stats), the
+  maintainer runs `npm run sync` / `npm run settle`. You don't need to.
 - **Player pricing:** the sync sets `price=0`; we hand-tier prices before launch
-  (build plan §6).
+  (build plan §6). Until then, build against price=0.
+
+## Testing — the shared bar (everyone)
+
+We keep it light but real. Two gates before you merge to `main`:
+
+1. **`npm run build` must pass** — this is the one hard rule for `main`.
+2. **`npm test` must pass** — runs every `*.test.ts` under `src/`. If you wrote
+   pure logic (squad rules, bet math, standings sort), it has a unit test.
+
+Pattern to copy: `src/lib/scoring.test.ts` — pure functions, `node:test` +
+`node:assert`, no DB or network. Keep business rules in a pure `src/lib/*.ts`
+file and test that; don't bury rules inside React components where they can't be
+tested. UI itself we verify manually (the "Manual" checks in each lane).
+
+Quick reference:
+- `npm run check` — confirm you're connected to the real shared DB
+- `npm test` — run all unit tests
+- `npm run build` — must pass before merge
+- `npm run db:studio` — eyeball what your code wrote to the DB
 
 ## Coordination rules
 

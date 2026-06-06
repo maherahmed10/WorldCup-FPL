@@ -28,58 +28,58 @@ API-Football  →  background job (src/jobs)  →  our Postgres  →  every user
 Never call API-Football on a per-user request. This keeps us inside the rate
 limit and stops the app falling over when everyone opens it during a match.
 
-## Quick start
+## Quick start — joining the team (most people)
+
+The shared Supabase DB is **already set up and loaded with real World Cup data**
+(48 teams · 1,248 players · 72 fixtures). You just connect and build — no Docker,
+no seed, no sync.
 
 ```bash
-# 1. Install
 npm install
-
-# 2. Env
-cp .env.example .env.local      # then fill in Supabase + API-Football values
-
-# 3. Confirm the API works on your plan (Step Zero)
-npm run verify-api              # needs APISPORTS_KEY in env
-
-# 4. Create the schema in your DB
-npm run db:push                 # or: npm run db:migrate  (for tracked migrations)
-
-# 5. Stub fake data so you're not blocked on the live feed
-npm run seed
-
-# 6. Run
+cp .env.example .env.local      # paste the shared values the maintainer sends you (DM)
+npm run db:generate             # generate the Prisma client
+npm run check                   # ✅ confirms you're connected: teams 48 · players 1248 · ...
 npm run dev                     # http://localhost:3000
-npm run db:studio               # browse the DB
+npm run db:studio               # optional: browse the real data
 ```
 
-### Don't have a DB yet? Two options
+`.env.local` values come **privately** from the maintainer — they're not in the
+repo (`.env.local` is git-ignored). Never commit secrets or paste them into a
+logged channel.
 
-- **Shared Supabase (recommended)** — one person creates a free project at
-  [supabase.com](https://supabase.com), shares the connection strings; everyone
-  uses the same DB so leaderboards/leagues work across the team.
-- **Local Docker (offline fallback)**:
-  ```bash
-  docker compose up -d
-  # set DATABASE_URL and DIRECT_URL both to:
-  #   postgresql://wcfpl:wcfpl@localhost:5432/wcfpl
-  npm run db:push && npm run seed
-  ```
+> Every `Player.price` is currently **0** — pricing is a pre-launch step (§6).
+> Build against price=0; real prices backfill later.
 
-## ⚠️ Will the API work? Run Step Zero first
+See [`TASKS.md`](TASKS.md) for who owns what + the per-lane test checklists.
 
-`npm run verify-api` checks that the 2026 World Cup data (`league=1, season=2026`)
-is live and reachable **on your plan**. Key caveats:
+## Maintainer setup — first-time / refresh (one person)
 
-- The free tier (100 req/day) usually **excludes current-season paid leagues** —
-  the World Cup likely needs a paid plan (~$19/mo). The verify script prints your
-  plan + quota so you'll know immediately.
-- **Player rosters fill in toward kickoff.** Teams + fixtures are live now; if
-  `/players` returns empty, build the data layer but **delay player pricing**.
+Only needed to stand up the DB or pull fresh data. Already done for the shared DB.
+
+```bash
+npm run verify-api      # confirm the API key + PRO plan reach season=2026
+npm run db:push         # create tables from the schema
+npm run sync            # pull real data: API-Football → DB (teams/fixtures/players)
+npm run settle          # after matches: compute FPL points from /fixtures/players
+```
+
+> ⚠️ **API plan:** the World Cup (`season=2026`) requires a **paid plan** (Pro,
+> ~$19/mo). The free tier is hard-blocked ("Free plans do not have access to this
+> season"). `npm run verify-api` prints your plan + quota.
+>
+> ⚠️ **Roster source:** use `/players/squads?team=X` per team (done in the sync
+> job) — `/players?league=...` returns 0 pre-tournament because it's stats-driven.
+>
+> ⚠️ **Supabase `DIRECT_URL`:** must use the **pooler** host on port 5432
+> (`aws-...pooler.supabase.com`), NOT `db.<ref>.supabase.co` (IPv6-only, won't
+> resolve on most networks). `DATABASE_URL` = same pooler host, port 6543.
 
 ## Scripts
 
 | Command | Does |
 |---|---|
 | `npm run dev` | Next.js dev server |
+| `npm run check` | Confirm your `.env.local` connects to the real shared DB |
 | `npm run verify-api` | Step Zero — confirm API key/plan reaches 2026 data |
 | `npm run db:push` | Push schema to DB (no migration history) |
 | `npm run db:migrate` | Create + apply a tracked migration |

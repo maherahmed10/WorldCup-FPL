@@ -39,9 +39,12 @@ When the feature is stable (it builds + works):
 
 ```bash
 npm run build      # must pass (this is the rule for main)
-npm test           # if you touched scoring or other tested logic
+npm test           # must pass — runs all src/**/*.test.ts (see TASKS.md per-lane tests)
 npm run lint       # keep it clean
 ```
+
+First time set up? Run `npm run check` to confirm you're connected to the shared
+DB with the real World Cup data before you start.
 
 ## Avoiding conflicts (we mostly own separate folders)
 

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "verify-api": "node scripts/verify-api.mjs",
+    "check": "tsx scripts/check.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
