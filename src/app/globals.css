@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* ============================================================
+   GAFFER — design tokens (ported from design/theme.css).
+   Premium dark "stadium at night". Edit tokens here; every screen
+   reads from these CSS variables so the look stays consistent.
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --bg:        #080B11;
+  --bg-grad-1: #0B1019;
+  --bg-grad-2: #080A0F;
+  --surface:   #121925;
+  --surface-2: #19212F;
+  --surface-3: #222C3D;
+  --surface-hi:#2A3649;
+
+  /* lines */
+  --line:   rgba(255,255,255,0.07);
+  --line-2: rgba(255,255,255,0.12);
+  --line-3: rgba(255,255,255,0.20);
+
+  /* text */
+  --text:   #EEF2F8;
+  --text-2: #97A4B6;
+  --text-3: #5E6B7E;
+
+  /* accents */
+  --accent:      #18E08A;   /* electric pitch green - primary */
+  --accent-2:    #0FC676;
+  --accent-deep: #0A8F55;
+  --accent-ink:  #042417;   /* text on accent */
+  --accent-glow: rgba(24,224,138,0.30);
+
+  --live:  #FF4D5E;         /* live / lost / over-budget */
+  --live-2:#E23D4D;
+  --gold:  #FFC53D;         /* captain / premium / won */
+  --gold-2:#F2B01E;
+  --blue:  #3DA5FF;         /* links / info / toggles */
+  --blue-deep:#1E6FD6;
+  --purple:#9D7BFF;
+
+  /* pitch */
+  --pitch-1: #167A47;
+  --pitch-2: #0F6238;
+  --pitch-line: rgba(255,255,255,0.22);
+
+  /* radii */
+  --r-sm: 8px;
+  --r:    12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* shadow */
+  --sh-1: 0 1px 2px rgba(0,0,0,0.4);
+  --sh-2: 0 4px 16px rgba(0,0,0,0.35);
+  --sh-3: 0 12px 40px rgba(0,0,0,0.55);
+  --sh-accent: 0 6px 22px rgba(24,224,138,0.28);
+
+  --font: "Hanken Grotesk", system-ui, sans-serif;
+  --display: "Archivo", system-ui, sans-serif;
+
+  --maxw: 1180px;
+  --sidebar: 248px;
+}
+
+/* Expose tokens to Tailwind v4 utilities (bg-surface, text-accent, etc.) */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-live: var(--live);
+  --color-gold: var(--gold);
+  --color-blue: var(--blue);
+  --color-purple: var(--purple);
+  --font-display: var(--display);
+  --font-sans: var(--font);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  margin: 0;
+}
+
+h1, h2, h3, h4 { font-family: var(--display); margin: 0; letter-spacing: -0.02em; }
+
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+::selection { background: var(--accent); color: var(--accent-ink); }

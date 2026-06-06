@@ -1,0 +1,26 @@
+# Offline / local-only Postgres fallback (build-plan: docker as fallback).
+# The DEFAULT path is shared Supabase — use this only when working offline.
+#
+#   docker compose up -d
+# then set BOTH in .env.local:
+#   DATABASE_URL="postgresql://wcfpl:wcfpl@localhost:5432/wcfpl"
+#   DIRECT_URL="postgresql://wcfpl:wcfpl@localhost:5432/wcfpl"
+# then: npm run db:push && npm run seed
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: wcfpl-postgres
+    environment:
+      POSTGRES_USER: wcfpl
+      POSTGRES_PASSWORD: wcfpl
+      POSTGRES_DB: wcfpl
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.docker-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wcfpl"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

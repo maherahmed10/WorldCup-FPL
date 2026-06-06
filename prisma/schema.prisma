@@ -1,0 +1,256 @@
+// World Cup 2026 Fantasy — data model (build-plan section 9).
+// This file IS the "agree the schema in hour one" artifact. Everyone builds
+// against these types; nobody is blocked on the live feed because the seed
+// script (npm run seed) stubs fake data into every table.
+//
+// After editing: `npx prisma migrate dev --name <change>` then `npx prisma generate`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Connection URLs live in prisma.config.ts (Prisma 7+):
+  //   url       = DATABASE_URL  (pooled, Supabase pgbouncer port 6543)
+  //   directUrl = DIRECT_URL    (direct, Supabase port 5432, for migrations)
+}
+
+// ───────────────────────── Position / enums ─────────────────────────
+
+enum Position {
+  GK
+  DEF
+  MID
+  FWD
+}
+
+enum FixtureStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  POSTPONED
+  CANCELLED
+}
+
+// Knockout-aware round labels; drives transfer windows + gameweek buckets.
+enum RoundType {
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  FINAL
+  THIRD_PLACE
+}
+
+enum BetStatus {
+  OPEN
+  WON
+  LOST
+  VOID
+}
+
+enum MarketType {
+  // Match-level (priced from /odds, fallback /predictions)
+  MATCH_RESULT // 1X2
+  OVER_UNDER
+  BTTS
+  CORRECT_SCORE
+  // Player-level (our own markets, fixed point values)
+  PLAYER_SCORER
+  PLAYER_ASSIST
+  PLAYER_CARD
+}
+
+// ───────────────────────── Core entities ─────────────────────────
+
+// User — maps 1:1 to a Supabase Auth user (id == auth.users.id UUID).
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  squads          Squad[]
+  bets            Bet[]
+  leagueMembers   LeagueMember[]
+  ownedLeagues    League[]       @relation("LeagueOwner")
+}
+
+model League {
+  id        String   @id @default(cuid())
+  name      String
+  joinCode  String   @unique
+  ownerId   String   @db.Uuid
+  owner     User     @relation("LeagueOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+
+  members LeagueMember[]
+}
+
+model LeagueMember {
+  id       String   @id @default(cuid())
+  leagueId String
+  userId   String   @db.Uuid
+  joinedAt DateTime @default(now())
+
+  league League @relation(fields: [leagueId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([leagueId, userId])
+}
+
+// Team — the 48 nations. `country` drives the max-3-per-country squad rule.
+model Team {
+  id         String  @id @default(cuid())
+  apiTeamId  Int     @unique // API-Football team id
+  name       String
+  country    String
+  logoUrl    String?
+  eliminated Boolean @default(false)
+
+  players   Player[]
+  homeGames Fixture[] @relation("HomeTeam")
+  awayGames Fixture[] @relation("AwayTeam")
+}
+
+// Player — pricing is OUR call (the API gives no projected points).
+model Player {
+  id          String   @id @default(cuid())
+  apiPlayerId Int      @unique
+  name        String
+  position    Position
+  price       Int // tenths of a million? keep integer; e.g. 130 = 13.0M. See seed.
+  photoUrl    String?
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id])
+
+  matchStats   PlayerMatchStat[]
+  squadPlayers SquadPlayer[]
+
+  @@index([teamId])
+  @@index([position])
+}
+
+// Gameweek — date-bucket (calendar range), NOT a global matchday deadline.
+// Group rounds 2 & 3 overlap across groups, so deadlines are calendar ranges.
+model Gameweek {
+  id        String    @id @default(cuid())
+  label     String // e.g. "Group MD1", "Round of 32"
+  roundType RoundType
+  startsAt  DateTime // window open
+  deadline  DateTime // squad/bet lock time
+  endsAt    DateTime // window close (last kickoff in bucket)
+  isKnockout Boolean  @default(false) // true => opens a transfer window
+
+  fixtures Fixture[]
+  squads   Squad[]
+  bets     Bet[]
+
+  @@index([startsAt])
+}
+
+model Fixture {
+  id          String        @id @default(cuid())
+  apiFixtureId Int          @unique
+  kickoff     DateTime
+  status      FixtureStatus @default(SCHEDULED)
+  venue       String?
+  homeScore   Int?
+  awayScore   Int?
+
+  gameweekId String
+  gameweek   Gameweek @relation(fields: [gameweekId], references: [id])
+
+  homeTeamId String
+  homeTeam   Team   @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeamId String
+  awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  playerStats PlayerMatchStat[]
+  bets        Bet[]
+
+  @@index([kickoff])
+  @@index([gameweekId])
+}
+
+// PlayerMatchStat — the raw feed (/fixtures/players) that settles BOTH
+// fantasy points and player-prop bets. Clean sheets are DERIVED from
+// minutes + goalsConceded, not stored as a flag.
+model PlayerMatchStat {
+  id        String @id @default(cuid())
+  playerId  String
+  fixtureId String
+
+  minutes        Int     @default(0)
+  goals          Int     @default(0)
+  assists        Int     @default(0)
+  yellowCards    Int     @default(0)
+  redCards       Int     @default(0)
+  saves          Int     @default(0)
+  penaltiesSaved Int     @default(0)
+  penaltiesMissed Int    @default(0)
+  goalsConceded  Int     @default(0)
+  ownGoals       Int     @default(0)
+  rating         Float? // API 0–10 rating (bonus-point substitute)
+
+  // Computed FPL points for this player in this fixture (filled by settlement job).
+  fantasyPoints Int?
+
+  player  Player  @relation(fields: [playerId], references: [id])
+  fixture Fixture @relation(fields: [fixtureId], references: [id])
+
+  @@unique([playerId, fixtureId])
+  @@index([fixtureId])
+}
+
+// Squad — a user's 15-player team valid from a given gameweek window.
+// A new Squad row is created when a knockout transfer window opens.
+model Squad {
+  id         String @id @default(cuid())
+  userId     String @db.Uuid
+  gameweekId String // valid-from window
+  captainId  String? // Player.id scoring x2
+
+  user     User          @relation(fields: [userId], references: [id])
+  gameweek Gameweek      @relation(fields: [gameweekId], references: [id])
+  players  SquadPlayer[]
+
+  @@unique([userId, gameweekId])
+}
+
+model SquadPlayer {
+  id       String  @id @default(cuid())
+  squadId  String
+  playerId String
+  isStarting Boolean @default(true) // false => bench (4 benched)
+
+  squad  Squad  @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([squadId, playerId])
+}
+
+// Bet — points-only prediction. payout = stake * multiplier if WON.
+model Bet {
+  id         String     @id @default(cuid())
+  userId     String     @db.Uuid
+  gameweekId String
+  fixtureId  String? // null for tournament-wide markets
+  marketType MarketType
+  selection  String // e.g. "HOME", "OVER_2.5", "playerId:scorer"
+  stake      Int
+  multiplier Float
+  status     BetStatus  @default(OPEN)
+  payout     Int?
+  createdAt  DateTime   @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id])
+  fixture  Fixture? @relation(fields: [fixtureId], references: [id])
+
+  @@index([userId])
+  @@index([gameweekId])
+}
