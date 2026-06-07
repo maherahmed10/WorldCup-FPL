@@ -57,6 +57,18 @@ export interface ApiFixture {
   goals: { home: number | null; away: number | null };
 }
 
+// Group standings — /standings?league=1&season=2026.
+// Each entry has `group` ("Group A" … "Group L") and `team.id`.
+// Used to populate Team.group which drives correct group-table labeling.
+export interface ApiStandingEntry {
+  group: string;
+  team: { id: number; name: string };
+}
+
+export interface ApiStanding {
+  league: { standings: ApiStandingEntry[][] };
+}
+
 // Official tournament squad per team — /players/squads?team=X.
 // This is the correct roster source pre-tournament: /players?league=...&season=...
 // returns 0 until matches generate stats, but squads are populated now.
@@ -87,22 +99,6 @@ export interface ApiFixturePlayers {
   players: ApiFixturePlayerStat[];
 }
 
-// Player aggregate for ONE season (across all competitions) — the prior-season
-// production signal used for initial pricing (build-plan §6). The WC season has
-// no stats yet, so we read a player's CLUB season instead (2025 → 2024 → 2023).
-export interface ApiPlayerSeason {
-  player: { id: number; name: string };
-  statistics: Array<{
-    league: { name: string; country?: string | null; season?: number };
-    games: { appearences: number | null; minutes: number | null; rating: string | null };
-    shots: { total: number | null; on: number | null };
-    goals: { total: number | null; conceded: number | null; assists: number | null; saves: number | null };
-    passes: { total: number | null; key: number | null; accuracy: number | null };
-    tackles: { total: number | null; blocks: number | null; interceptions: number | null };
-    dribbles: { attempts: number | null; success: number | null };
-  }>;
-}
-
 // ── Endpoint methods (the only API surface the job uses) ──
 
 export const apiFootball = {
@@ -118,11 +114,10 @@ export const apiFootball = {
   // Loop over all 48 teams (one request each) to build the full pool.
   squad: (teamId: number) => get<ApiSquad>(`/players/squads?team=${teamId}`),
 
+  standings: () =>
+    get<ApiStanding>(`/standings?league=${WORLD_CUP_LEAGUE}&season=${SEASON}`),
+
   // Per-fixture player stats — the settlement feed.
   fixturePlayers: (fixtureId: number) =>
     get<ApiFixturePlayers>(`/fixtures/players?fixture=${fixtureId}`),
-
-  // One player's aggregated stats for a given season — the pricing input.
-  playerSeason: (playerId: number, season: number) =>
-    get<ApiPlayerSeason>(`/players?id=${playerId}&season=${season}`),
 };

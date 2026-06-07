@@ -1,47 +1,56 @@
-// Team crest / flag. Uses the real API-Football logo (Team.logoUrl); falls back
-// to a tinted initials chip when the crest is missing. Plain <img> keeps us out
-// of next.config remote-image setup (a shared file).
+// Country flag backed by the flag-icons library — full coverage of all 48
+// World Cup nations. Pass the country NAME (as stored in Team.country).
+// Falls back to a 2-letter code badge for anything unmapped.
+import { countryIso, countryCode } from "@/lib/countries";
 
 export function Flag({
-  logoUrl,
-  name,
-  size = 22,
-  round = true,
+  country,
+  size = 18,
+  round = false,
+  style,
 }: {
-  logoUrl: string | null;
-  name: string;
+  country: string;
   size?: number;
   round?: boolean;
+  style?: React.CSSProperties;
 }) {
-  const radius = round ? "9999px" : "3px";
-  if (logoUrl) {
+  const iso = countryIso(country);
+  const w = round ? size : size * 1.5;
+  const base: React.CSSProperties = {
+    display: "inline-flex",
+    flex: "0 0 auto",
+    width: `${w}px`,
+    height: `${size}px`,
+    borderRadius: round ? "50%" : "3px",
+    overflow: "hidden",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.18)",
+    ...style,
+  };
+
+  if (iso) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={logoUrl}
-        alt={name}
-        width={size}
-        height={size}
-        style={{ borderRadius: radius, objectFit: "cover", flex: "0 0 auto" }}
+      <span
+        className={`fi fi-${iso}${round ? " fis" : ""}`}
+        style={{ ...base, backgroundSize: "cover", backgroundPosition: "center" }}
       />
     );
   }
-  const initials = name.slice(0, 2).toUpperCase();
+
+  // Fallback: 2-letter code badge.
   return (
     <span
-      aria-label={name}
-      className="grid place-items-center font-[family-name:var(--font-display)] font-bold"
       style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        fontSize: size * 0.4,
-        background: "var(--surface-3)",
-        color: "var(--text-2)",
-        flex: "0 0 auto",
+        ...base,
+        width: `${size}px`,
+        background: "#222C3D",
+        color: "#97A4B6",
+        fontSize: size * 0.46,
+        fontWeight: 700,
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      {initials}
+      {countryCode(country).slice(0, 2)}
     </span>
   );
 }

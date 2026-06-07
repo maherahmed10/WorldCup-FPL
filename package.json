@@ -16,8 +16,7 @@
     "seed": "tsx prisma/seed.ts",
     "sync": "tsx src/jobs/sync.ts",
     "settle": "tsx src/jobs/settle.ts",
-    "price": "tsx src/jobs/price.ts",
-    "load-alt-prices": "tsx scripts/load-alt-prices.ts",
+    "load-prices": "tsx scripts/load-prices.ts",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
@@ -26,6 +25,7 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.107.0",
     "dotenv": "^17.4.2",
+    "flag-icons": "^7.5.0",
     "next": "16.2.7",
     "pg": "^8.21.0",
     "prisma": "^7.8.0",

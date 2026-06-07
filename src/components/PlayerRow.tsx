@@ -57,7 +57,7 @@ export function PlayerRow({
         cursor: clickable ? "pointer" : "default",
       }}
     >
-      <Flag logoUrl={p.logoUrl} name={p.country} size={22} />
+      <Flag country={p.country} size={22} round />
 
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-bold">{p.name}</div>

@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Flag icons (all 48 nations) + ported design-system stylesheets. */
+@import "flag-icons/css/flag-icons.min.css";
+@import "../styles/components.css";
+@import "../styles/shell.css";
+@import "../styles/screens.css";
+
 /* ============================================================
    GAFFER — design tokens (ported from design/theme.css).
    Premium dark "stadium at night". Edit tokens here; every screen
@@ -98,6 +104,68 @@ body {
 
 h1, h2, h3, h4 { font-family: var(--display); margin: 0; letter-spacing: -0.02em; }
 
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input { font-family: inherit; }
+
 .num { font-family: var(--display); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
 
 ::selection { background: var(--accent); color: var(--accent-ink); }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--surface-hi); }
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-weight: 700; font-size: 14px; letter-spacing: 0.01em;
+  padding: 11px 18px; border-radius: var(--r-pill);
+  transition: transform .12s ease, background .15s ease, box-shadow .15s ease, opacity .15s ease;
+  white-space: nowrap; user-select: none;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: var(--sh-accent); }
+.btn-primary:hover { background: #2BE998; }
+.btn-primary:disabled { background: var(--surface-3); color: var(--text-3); box-shadow: none; cursor: not-allowed; }
+.btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); }
+.btn-ghost:hover { background: var(--surface-3); }
+.btn-live { background: var(--live); color: #fff; }
+.btn-sm { padding: 8px 14px; font-size: 13px; }
+.btn-block { width: 100%; }
+
+/* ---- chips / pills ---- */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line);
+}
+.pill-accent { background: rgba(24,224,138,0.14); color: var(--accent); border-color: rgba(24,224,138,0.28); }
+.pill-live   { background: rgba(255,77,94,0.16); color: #ff8b96; border-color: rgba(255,77,94,0.32); }
+.pill-gold   { background: rgba(255,197,61,0.16); color: var(--gold); border-color: rgba(255,197,61,0.32); }
+.pill-blue   { background: rgba(61,165,255,0.14); color: var(--blue); border-color: rgba(61,165,255,0.30); }
+
+/* ---- cards ---- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.card-2 { background: var(--surface-2); }
+
+/* ---- position chips ---- */
+.pos { font-weight: 800; font-size: 11px; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 6px; }
+.pos-GK { background: rgba(255,197,61,0.18); color: var(--gold); }
+.pos-DEF{ background: rgba(61,165,255,0.18); color: var(--blue); }
+.pos-MID{ background: rgba(24,224,138,0.18); color: var(--accent); }
+.pos-FWD{ background: rgba(157,123,255,0.20); color: var(--purple); }
+
+/* ---- utility ---- */
+.row { display: flex; align-items: center; }
+.muted { color: var(--text-2); }
+.dim { color: var(--text-3); }
+
+/* ---- animations used across screens ---- */
+@keyframes popIn { from { transform: translateY(10px) scale(.985); } to { transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(14px); } to { transform: translateY(0); } }
+@keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: livePulse 1.2s ease-in-out infinite; }
