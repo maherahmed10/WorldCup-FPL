@@ -129,9 +129,24 @@ model Player {
 
   matchStats   PlayerMatchStat[]
   squadPlayers SquadPlayer[]
+  priceAlt     PlayerPriceAlt?
 
   @@index([teamId])
   @@index([position])
+}
+
+// Alternative, JUDGEMENT-BASED prices (build-plan §6 hand-tiering). Kept in a
+// SEPARATE table so Player.price (the stats-driven model) stays intact and both
+// versions are queryable side by side. price is tenths of a million (130 = 13.0M).
+model PlayerPriceAlt {
+  id        String   @id @default(cuid())
+  playerId  String   @unique
+  price     Int // tenths of a million, judgement-based
+  tier      String? // e.g. "superstar", "elite", "starter", "squad", "fringe"
+  note      String? // short rationale
+  createdAt DateTime @default(now())
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 }
 
 // Gameweek — date-bucket (calendar range), NOT a global matchday deadline.
