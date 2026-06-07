@@ -1,0 +1,140 @@
+// My Team / dashboard — ported from design/screens_dash.jsx.
+// Server component: loads the user's active squad for the current gameweek.
+// Shows the empty "pick your team" state if they haven't built one yet.
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { Icon } from "@/components/Icon";
+import { StatCard } from "@/components/StatCard";
+import { Countdown } from "@/components/Countdown";
+import { Pitch } from "@/components/Pitch";
+import {
+  getCurrentGameweek,
+  getActiveSquad,
+  toPitchRows,
+} from "@/lib/squad-data";
+import { totalPrice } from "@/lib/squad-rules";
+import { TeamNamePrompt } from "./TeamNamePrompt";
+
+export default async function TeamPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // The (app) layout guarantees a user; this is just for types.
+  if (!user) return null;
+
+  const appUser = await db.user.findUnique({ where: { id: user.id } });
+
+  // First-login: prompt for a fantasy team name before anything else.
+  if (appUser && !appUser.teamName) {
+    return (
+      <div className="screen">
+        <div className="screen-head">
+          <h1>My Team</h1>
+        </div>
+        <TeamNamePrompt suggestion={appUser.name} />
+      </div>
+    );
+  }
+
+  const teamName = appUser?.teamName ?? "My Team";
+  const gameweek = await getCurrentGameweek();
+  const squad = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
+
+  // ---- empty state: no squad yet ----
+  if (!squad) {
+    return (
+      <div className="screen">
+        <div className="screen-head">
+          <h1>{teamName}</h1>
+        </div>
+        <div className="empty">
+          <div className="empty-ico">
+            <Icon name="team" size={28} />
+          </div>
+          <h3>No squad yet</h3>
+          <p>
+            Pick your 15-player World Cup squad to start earning points this
+            round.
+          </p>
+          <Link className="btn btn-primary" href="/squad">
+            <Icon name="plus" size={17} />
+            Pick Your Team
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- has a squad: full dashboard ----
+  const squadValue = totalPrice(squad.players); // tenths of a million
+  // gameweek is guaranteed here (we'd have hit the empty state otherwise).
+  const deadlineMs = gameweek!.deadline.getTime();
+  const rows = toPitchRows(squad.players);
+  const bench = squad.players.filter((p) => !p.isStarting);
+
+  // GW points come from settled PlayerMatchStat; none yet pre-tournament → 0s.
+  const gwPoints: Record<string, number> = {};
+
+  return (
+    <div className="screen">
+      <div className="screen-head head-row">
+        <div>
+          <h1>{teamName}</h1>
+          <div className="sub">{gameweek?.label}</div>
+        </div>
+        <Link className="btn btn-ghost" href="/squad">
+          <Icon name="settings" size={16} />
+          Edit Squad
+        </Link>
+      </div>
+
+      <div className="grid-stats">
+        <StatCard label="Total Points" value={0} sub="Season" icon="bolt" />
+        <StatCard label="This Round" value="+0" sub={gameweek?.label ?? ""} tone="accent" icon="arrowup" />
+        <StatCard label="Squad" value={`${squad.players.length}/15`} sub="Players picked" tone="gold" icon="team" />
+        <StatCard label="Squad Value" value={`£${(squadValue / 10).toFixed(1)}m`} sub="At selection" tone="blue" icon="coins" />
+      </div>
+
+      <div className="banner warn" style={{ marginTop: 14 }}>
+        <div className="banner-l">
+          <div className="banner-ico">
+            <Icon name="clock" size={20} style={{ color: "var(--gold)" }} />
+          </div>
+          <div>
+            <h4>{gameweek?.label} deadline</h4>
+            <p>Set your captain and squad before kickoff.</p>
+          </div>
+        </div>
+        <Countdown to={deadlineMs} />
+      </div>
+
+      <div className="two-col" style={{ marginTop: 16 }}>
+        <div>
+          <div className="pitch-wrap">
+            <Pitch rows={rows} captainId={squad.captainId} mode="view" gwPoints={gwPoints} />
+          </div>
+        </div>
+        <div>
+          <div className="card" style={{ padding: 16 }}>
+            <div className="sum-title" style={{ marginBottom: 10 }}>
+              Bench
+            </div>
+            {bench.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--text-3)" }}>No bench players.</p>
+            ) : (
+              bench.map((p) => (
+                <div key={p.id} className="score-row">
+                  <span className={"pos pos-" + p.position}>{p.position}</span>
+                  <span className="sr-name">{p.name}</span>
+                  <span className="sr-pts num">{gwPoints[p.id] ?? 0}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

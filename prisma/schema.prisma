@@ -69,7 +69,8 @@ enum MarketType {
 model User {
   id        String   @id @db.Uuid
   email     String   @unique
-  name      String
+  name      String // the person's real name (from Google / email)
+  teamName  String? // their fantasy team name — set in-app after first login
   createdAt DateTime @default(now())
 
   squads          Squad[]
@@ -107,6 +108,7 @@ model Team {
   apiTeamId  Int     @unique // API-Football team id
   name       String
   country    String
+  group      String? // group-stage group label, e.g. "Group A" (Lane 3 / fixtures)
   logoUrl    String?
   eliminated Boolean @default(false)
 
