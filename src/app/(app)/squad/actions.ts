@@ -10,6 +10,8 @@ import { db } from "@/lib/db";
 import { getCurrentGameweek } from "@/lib/squad-data";
 import {
   validateSquad,
+  formationName,
+  XI_SIZE,
   type Position,
   type SquadPlayer,
 } from "@/lib/squad-rules";
@@ -54,6 +56,18 @@ export async function saveSquad(payload: SavePayload) {
   const result = validateSquad(asRules);
   if (!result.valid) {
     return { ok: false, error: result.errors[0]?.message ?? "Invalid squad." };
+  }
+
+  // Starting XI must be 11 + a 4-man bench, in an allowable named formation.
+  if (payload.starterIds.length !== XI_SIZE || payload.benchIds.length !== 4) {
+    return { ok: false, error: "Pick 11 starters and 4 substitutes." };
+  }
+  const byId = new Map(asRules.map((p) => [p.id, p]));
+  const starterRules = payload.starterIds
+    .map((id) => byId.get(id))
+    .filter((p): p is SquadPlayer => !!p);
+  if (!formationName(starterRules)) {
+    return { ok: false, error: "Your starting 11 isn't an allowed formation." };
   }
   if (payload.captainId && !allIds.includes(payload.captainId)) {
     return { ok: false, error: "Captain must be in the squad." };
