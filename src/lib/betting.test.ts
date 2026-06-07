@@ -8,6 +8,7 @@ import {
   availableBalance,
   canPlaceBet,
   matchMarkets,
+  scorerMultiplier,
   STARTING_BALANCE,
   type BetLike,
 } from "./betting.js";
@@ -80,4 +81,32 @@ test("matchMarkets: 3 groups, stable selection keys", () => {
   assert.equal(result.options[0].name, "England");
   assert.equal(result.options[0].selection, "HOME");
   assert.equal(result.options[2].selection, "AWAY");
+});
+
+test("matchMarkets: real odds override placeholders; missing falls back", () => {
+  const groups = matchMarkets("England", "Japan", { HOME: 1.4, AWAY: 8.4 });
+  const result = groups.find((g) => g.marketType === "MATCH_RESULT")!;
+  assert.equal(result.options[0].multiplier, 1.4); // real
+  assert.equal(result.options[2].multiplier, 8.4); // real
+  assert.equal(result.options[1].multiplier, 3.3); // DRAW missing → placeholder
+});
+
+test("scorerMultiplier: premium FWD pays less than a cheap MID", () => {
+  const star = scorerMultiplier("FWD", 130); // £13.0m striker
+  const cheapMid = scorerMultiplier("MID", 45); // £4.5m midfielder
+  assert.ok(star < cheapMid, `${star} should be < ${cheapMid}`);
+  assert.ok(star >= 1.6); // clamped floor
+});
+
+test("scorerMultiplier: position ordering (FWD < MID < DEF) at equal price", () => {
+  const p = 70;
+  assert.ok(scorerMultiplier("FWD", p) < scorerMultiplier("MID", p));
+  assert.ok(scorerMultiplier("MID", p) < scorerMultiplier("DEF", p));
+});
+
+test("scorerMultiplier: clamped to [1.6, 8.0] and 2dp", () => {
+  const hi = scorerMultiplier("GK", 40); // cheap GK → should hit the 8.0 ceiling
+  const lo = scorerMultiplier("FWD", 150); // £15m striker → should hit ~floor
+  assert.ok(hi <= 8.0 && lo >= 1.6);
+  assert.equal(Math.round(hi * 100) / 100, hi); // already 2dp
 });

@@ -177,12 +177,86 @@ export async function syncStandings() {
   console.log(`✓ standings: ${updated} team group labels updated`);
 }
 
+// ── Odds: pull real match-market odds (/odds) into FixtureOdds. ──
+// Maps API bet markets to our betting.ts selection keys:
+//   bet 1 Match Winner → HOME / DRAW / AWAY
+//   bet 5 Goals O/U    → OVER_2.5 / UNDER_2.5  (only the 2.5 line)
+//   bet 8 Both Teams   → BTTS_YES / BTTS_NO
+// Odds have a 7-day upstream window, so unscheduled/far fixtures return nothing
+// — that's expected; we just skip them. Idempotent upsert per (fixture,selection).
+function extractOdds(odds: import("@/lib/api-football").ApiOdds): Record<string, number> {
+  const out: Record<string, number> = {};
+  const bm = odds.bookmakers?.[0];
+  if (!bm) return out;
+  const num = (s?: string) => (s ? Number(s) : NaN);
+  const get = (betId: number) => bm.bets?.find((b) => b.id === betId);
+
+  const mw = get(1);
+  if (mw) {
+    for (const v of mw.values) {
+      if (v.value === "Home") out.HOME = num(v.odd);
+      else if (v.value === "Draw") out.DRAW = num(v.odd);
+      else if (v.value === "Away") out.AWAY = num(v.odd);
+    }
+  }
+  const ou = get(5);
+  if (ou) {
+    for (const v of ou.values) {
+      if (v.value === "Over 2.5") out["OVER_2.5"] = num(v.odd);
+      else if (v.value === "Under 2.5") out["UNDER_2.5"] = num(v.odd);
+    }
+  }
+  const btts = get(8);
+  if (btts) {
+    for (const v of btts.values) {
+      if (v.value === "Yes") out.BTTS_YES = num(v.odd);
+      else if (v.value === "No") out.BTTS_NO = num(v.odd);
+    }
+  }
+  // Drop any NaN entries.
+  for (const k of Object.keys(out)) if (!Number.isFinite(out[k])) delete out[k];
+  return out;
+}
+
+export async function syncOdds() {
+  // Only upcoming/unfinished fixtures need odds.
+  const fixtures = await db.fixture.findMany({
+    where: { status: { in: ["SCHEDULED", "LIVE"] } },
+    orderBy: { kickoff: "asc" },
+  });
+  let priced = 0;
+  let rows = 0;
+  for (const f of fixtures) {
+    let resp;
+    try {
+      resp = await apiFootball.odds(f.apiFixtureId);
+    } catch (e) {
+      console.error(`  ✗ odds ${f.apiFixtureId}:`, (e as Error).message);
+      continue;
+    }
+    const odds = resp[0] ? extractOdds(resp[0]) : {};
+    const entries = Object.entries(odds);
+    if (entries.length === 0) continue; // outside 7-day window / unpriced
+    for (const [selection, multiplier] of entries) {
+      await db.fixtureOdds.upsert({
+        where: { fixtureId_selection: { fixtureId: f.id, selection } },
+        update: { multiplier },
+        create: { fixtureId: f.id, selection, multiplier },
+      });
+      rows++;
+    }
+    priced++;
+  }
+  console.log(`✓ odds: ${rows} odds rows across ${priced} fixtures (others outside 7-day window)`);
+}
+
 export async function fullSync() {
   await syncGameweeks();
   await syncTeams();
   await syncFixtures();
   await syncPlayers();
   await syncStandings();
+  await syncOdds();
   console.log("✓ full sync complete");
 }
 
@@ -195,6 +269,7 @@ if (process.argv[1]?.endsWith("sync.ts") || process.argv[1]?.endsWith("sync.js")
     : which === "players" ? syncPlayers
     : which === "gameweeks" ? syncGameweeks
     : which === "standings" ? syncStandings
+    : which === "odds" ? syncOdds
     : fullSync;
   run()
     .then(() => process.exit(0))

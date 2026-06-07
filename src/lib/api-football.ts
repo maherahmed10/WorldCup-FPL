@@ -99,6 +99,23 @@ export interface ApiFixturePlayers {
   players: ApiFixturePlayerStat[];
 }
 
+// Pre-match odds — /odds?fixture=ID. Nested: bookmakers → bets → values.
+// We read bet ids: 1 Match Winner, 5 Goals Over/Under, 8 Both Teams Score.
+// Odds have a 7-day upstream window, so only fixtures near kickoff return data.
+export interface ApiOddsValue {
+  value: string; // e.g. "Home", "Over 2.5", "Yes"
+  odd: string; // decimal odds as a string, e.g. "2.10"
+}
+export interface ApiOddsBet {
+  id: number;
+  name: string;
+  values: ApiOddsValue[];
+}
+export interface ApiOdds {
+  fixture: { id: number };
+  bookmakers: Array<{ id: number; name: string; bets: ApiOddsBet[] }>;
+}
+
 // ── Endpoint methods (the only API surface the job uses) ──
 
 export const apiFootball = {
@@ -120,4 +137,7 @@ export const apiFootball = {
   // Per-fixture player stats — the settlement feed.
   fixturePlayers: (fixtureId: number) =>
     get<ApiFixturePlayers>(`/fixtures/players?fixture=${fixtureId}`),
+
+  // Pre-match odds for one fixture (only available within ~7 days of kickoff).
+  odds: (fixtureId: number) => get<ApiOdds>(`/odds?fixture=${fixtureId}`),
 };

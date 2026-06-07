@@ -33,7 +33,8 @@ export const MIN_STAKE = 1;
 
 /**
  * Fixed multipliers for OUR player-prop markets (§7). The API's World Cup
- * player-prop odds are unreliable, so we price these ourselves.
+ * player-prop odds are unreliable/sparse, so we price these ourselves.
+ * Used as fallbacks; PLAYER_SCORER is derived per-player (see scorerMultiplier).
  */
 export const PLAYER_PROP_MULTIPLIER: Record<
   "PLAYER_SCORER" | "PLAYER_ASSIST" | "PLAYER_CARD",
@@ -43,6 +44,28 @@ export const PLAYER_PROP_MULTIPLIER: Record<
   PLAYER_ASSIST: 4.0,
   PLAYER_CARD: 3.5,
 };
+
+/**
+ * Anytime-scorer multiplier, derived from position + price (our own market — the
+ * API's player props are unreliable). A premium forward is likeliest to score so
+ * pays the least; a cheap midfielder pays the most. price is in TENTHS of a
+ * million (matches Player.price; 130 = 13.0M). Returns a decimal odds value
+ * rounded to 2dp, clamped to a sensible [1.6, 8.0] band.
+ */
+export function scorerMultiplier(
+  position: "GK" | "DEF" | "MID" | "FWD",
+  price: number,
+): number {
+  // Base by position: forwards score most, then mids, defs rarely, GKs ~never.
+  const base: Record<string, number> = { FWD: 2.6, MID: 4.0, DEF: 7.0, GK: 8.0 };
+  // Price adjustment: every 1.0M above 5.0M shaves the odds (more likely). The
+  // 0.16 factor gives a ~£13m striker ≈ 2.6 − 8×0.16 ≈ 1.7; a £4.5m mid ≈ 4.0.
+  const priceM = price / 10;
+  const adj = (priceM - 5) * 0.16;
+  const raw = (base[position] ?? 5.0) - adj;
+  const clamped = Math.min(8.0, Math.max(1.6, raw));
+  return Math.round(clamped * 100) / 100;
+}
 
 /** A single placed/settled bet, reduced to just what the math needs. */
 export interface BetLike {
@@ -103,36 +126,51 @@ export interface MarketGroup {
   options: MarketOption[];
 }
 
+// Placeholder odds, used only when the real /odds feed has nothing for a
+// fixture (e.g. outside the 7-day window). Keyed by selection.
+const PLACEHOLDER_ODDS: Record<string, number> = {
+  HOME: 2.1, DRAW: 3.3, AWAY: 3.0,
+  "OVER_2.5": 1.9, "UNDER_2.5": 1.9,
+  BTTS_YES: 2.0, BTTS_NO: 1.75,
+};
+
 /**
- * The three standard match-level market groups with PLACEHOLDER odds (MVP).
- * Real per-fixture pricing from /odds replaces the constants later; the shape
- * (selection keys + multipliers) is what settlement reads.
+ * The three standard match-level market groups.
+ * Pass `odds` (selection → decimal multiplier, from FixtureOdds) for REAL
+ * per-fixture pricing; any missing selection falls back to a sane placeholder.
+ * Call with no odds for the pure-placeholder shape (used by tests).
  */
-export function matchMarkets(homeName: string, awayName: string): MarketGroup[] {
+export function matchMarkets(
+  homeName: string,
+  awayName: string,
+  odds?: Record<string, number>,
+): MarketGroup[] {
+  const m = (selection: string) =>
+    odds?.[selection] ?? PLACEHOLDER_ODDS[selection];
   return [
     {
       marketType: "MATCH_RESULT",
       label: "Match Result",
       options: [
-        { name: homeName, selection: "HOME", multiplier: 2.1 },
-        { name: "Draw", selection: "DRAW", multiplier: 3.3 },
-        { name: awayName, selection: "AWAY", multiplier: 3.0 },
+        { name: homeName, selection: "HOME", multiplier: m("HOME") },
+        { name: "Draw", selection: "DRAW", multiplier: m("DRAW") },
+        { name: awayName, selection: "AWAY", multiplier: m("AWAY") },
       ],
     },
     {
       marketType: "OVER_UNDER",
       label: "Over / Under 2.5 Goals",
       options: [
-        { name: "Over 2.5", selection: "OVER_2.5", multiplier: 1.9 },
-        { name: "Under 2.5", selection: "UNDER_2.5", multiplier: 1.9 },
+        { name: "Over 2.5", selection: "OVER_2.5", multiplier: m("OVER_2.5") },
+        { name: "Under 2.5", selection: "UNDER_2.5", multiplier: m("UNDER_2.5") },
       ],
     },
     {
       marketType: "BTTS",
       label: "Both Teams To Score",
       options: [
-        { name: "Yes", selection: "BTTS_YES", multiplier: 2.0 },
-        { name: "No", selection: "BTTS_NO", multiplier: 1.75 },
+        { name: "Yes", selection: "BTTS_YES", multiplier: m("BTTS_YES") },
+        { name: "No", selection: "BTTS_NO", multiplier: m("BTTS_NO") },
       ],
     },
   ];

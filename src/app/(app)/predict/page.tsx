@@ -8,10 +8,11 @@ import { getCurrentUser } from "@/lib/current-user";
 import {
   availableBalance,
   matchMarkets,
-  PLAYER_PROP_MULTIPLIER,
+  scorerMultiplier,
   type BetLike,
   type MarketType,
 } from "@/lib/betting";
+import { judgementScorerOdds } from "@/lib/scorer-odds";
 import { PredictClient, type BetView, type FixtureMarketsView } from "./PredictClient";
 
 export const dynamic = "force-dynamic";
@@ -85,27 +86,33 @@ export default async function PredictPage() {
     include: {
       homeTeam: { select: { id: true, name: true, logoUrl: true } },
       awayTeam: { select: { id: true, name: true, logoUrl: true } },
+      odds: { select: { selection: true, multiplier: true } }, // real /odds, if synced
     },
   });
 
   // Attacking players for the teams on show → anytime-scorer options.
+  // Order by price desc so the priciest (most likely) scorers surface first.
   const teamIds = Array.from(new Set(fixtures.flatMap((f) => [f.homeTeamId, f.awayTeamId])));
   const attackers = teamIds.length
     ? await db.player.findMany({
         where: { teamId: { in: teamIds }, position: { in: ["FWD", "MID"] } },
-        select: { id: true, name: true, teamId: true },
-        orderBy: { name: "asc" },
+        select: { id: true, name: true, teamId: true, position: true, price: true },
+        orderBy: [{ price: "desc" }, { name: "asc" }],
       })
     : [];
-  const scorersByTeam = new Map<string, Array<{ id: string; name: string }>>();
+  type Scorer = { id: string; name: string; position: "FWD" | "MID"; price: number };
+  const scorersByTeam = new Map<string, Scorer[]>();
   for (const a of attackers) {
     const list = scorersByTeam.get(a.teamId) ?? [];
-    if (list.length < SCORERS_PER_TEAM) list.push({ id: a.id, name: a.name });
+    if (list.length < SCORERS_PER_TEAM)
+      list.push({ id: a.id, name: a.name, position: a.position as "FWD" | "MID", price: a.price });
     scorersByTeam.set(a.teamId, list);
   }
 
   const markets: FixtureMarketsView[] = fixtures.map((f) => {
-    const groups = matchMarkets(f.homeTeam.name, f.awayTeam.name).map((g) => ({
+    // Real per-fixture odds (selection → multiplier); empty until syncOdds runs.
+    const oddsMap = Object.fromEntries(f.odds.map((o) => [o.selection, o.multiplier]));
+    const groups = matchMarkets(f.homeTeam.name, f.awayTeam.name, oddsMap).map((g) => ({
       marketType: g.marketType,
       label: g.label,
       options: g.options,
@@ -121,7 +128,8 @@ export default async function PredictPage() {
         options: scorers.map((s) => ({
           name: s.name,
           selection: `scorer:${s.id}`,
-          multiplier: PLAYER_PROP_MULTIPLIER.PLAYER_SCORER,
+          // Resolution: curated judgement for elite finishers → position/price formula.
+          multiplier: judgementScorerOdds(s.name) ?? scorerMultiplier(s.position, s.price),
         })),
       });
     }
