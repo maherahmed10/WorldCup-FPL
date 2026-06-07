@@ -1,6 +1,10 @@
+"use client";
+
 // Pitch + player tokens ported from design/components.jsx.
 // Data-driven from our real squad shape. Works in "view" (dashboard, shows
 // points) and "pick" (picker, shows price + empty slots) modes.
+// Client component: the slot tokens render interactive <button onClick> even in
+// view mode, so this must not be a server component.
 import { Icon } from "@/components/Icon";
 import { Flag } from "@/components/Flag";
 import { Jersey } from "@/components/Jersey";

@@ -19,7 +19,7 @@ import {
   validateSquad,
   countByCountry,
   countByPosition,
-  isValidFormation,
+  formationName,
   canSwap,
   type Position,
   type SquadPlayer,
@@ -86,7 +86,12 @@ export function SquadPicker({
   const pickedIds = useMemo(() => new Set(squad.map((p) => p.id)), [squad]);
   const starters = squad.filter((p) => p.isStarting);
   const bench = squad.filter((p) => !p.isStarting);
-  const formationOk = starters.length === XI_SIZE && isValidFormation(starters);
+  // Live formation: the named shape the starting XI is in (e.g. "4-3-3"). null
+  // until 11 are picked AND they form one of the allowable formations.
+  const currentFormation = formationName(starters);
+  const starterCounts = countByPosition(starters);
+  const shapeStr = `${starterCounts.DEF}-${starterCounts.MID}-${starterCounts.FWD}`;
+  const formationOk = currentFormation !== null;
 
   // ── squad mutations ──
   function addPlayer(p: PickerPlayer) {
@@ -108,7 +113,7 @@ export function SquadPicker({
     const starter = a.isStarting ? a : b;
     const reserve = a.isStarting ? b : a;
     if (!canSwap(starters, starter, reserve)) {
-      setMessage(`Can't sub a ${reserve.position} for a ${starter.position} — it would break the formation.`);
+      setMessage(`Can't sub a ${reserve.position} for a ${starter.position} — the result isn't an allowed formation (4-4-2, 4-3-3, 3-5-2, 3-4-3, 5-3-2, 4-5-1).`);
       return false;
     }
     setMessage(null);
@@ -158,19 +163,26 @@ export function SquadPicker({
     }
   }
 
-  // ── pitch layout: exactly the 11 starting slots ──
-  // Each line shows its starters; empty slots fill up to the 4-3-3 target (only
-  // while the squad still has unbenched picks of that position to place). Once
-  // 11 are picked the pitch is full; drags then reshape who starts.
+  // ── pitch layout: the 11 starting slots ──
+  // Each line shows its current starters. Empty slots only appear WHILE BUILDING
+  // (fewer than 11 starters) to guide filling toward a 4-3-3 — and only as many
+  // as keep the total starting slots at 11. Once 11 start, the pitch is full and
+  // there are NO empty slots; the formation is whatever the starters form, and
+  // drags reshape it (so a 4-4-2 shows exactly 2 FWD slots, no phantom 3rd).
+  const buildingXI = starters.length < XI_SIZE;
   const pitchRows: Record<Position, PitchSlot[]> = { GK: [], DEF: [], MID: [], FWD: [] };
+  let emptyBudget = XI_SIZE - starters.length; // total empty starting slots to show
   for (const pos of POS_ORDER) {
     const startingHere = starters.filter((p) => p.position === pos);
     startingHere.forEach((p) => pitchRows[pos].push({ position: pos, player: p }));
-    // Show empty starting slots up to the 4-3-3 target for this line, but only
-    // as many as there are still-unfilled squad slots overall (don't over-show).
-    const target = INITIAL_XI[pos];
-    const emptyStarting = Math.max(0, target - startingHere.length);
-    for (let i = 0; i < emptyStarting; i++) pitchRows[pos].push({ position: pos, player: null });
+    if (buildingXI) {
+      // Want up to the 4-3-3 target for this line, but never more than the
+      // remaining empty budget (so the pitch never exceeds 11 slots total).
+      const want = Math.max(0, INITIAL_XI[pos] - startingHere.length);
+      const show = Math.min(want, emptyBudget);
+      for (let i = 0; i < show; i++) pitchRows[pos].push({ position: pos, player: null });
+      emptyBudget -= show;
+    }
   }
 
   const canSave = validation.valid && formationOk && !saving;
@@ -205,7 +217,7 @@ export function SquadPicker({
         <div className="valid-msgs" style={{ marginTop: 12 }}>
           <div className="vmsg err">
             <span className="ic"><Icon name="info" size={16} /></span>
-            Your starting 11 isn&apos;t a valid formation. Swap players between the pitch and bench.
+            Your starting 11 isn&apos;t an allowed formation. Swap players between the pitch and bench.
           </div>
         </div>
       )}
@@ -228,6 +240,19 @@ export function SquadPicker({
 
       <div className="two-col" style={{ marginTop: 16 }}>
         <div>
+          <div className="pitch-toolbar">
+            <span className="pt-label">Formation</span>
+            <span className={"pill " + (currentFormation ? "pill-accent" : starters.length === XI_SIZE ? "pill-live" : "")}>
+              {currentFormation ?? shapeStr}
+            </span>
+            {currentFormation ? (
+              <span className="muted" style={{ fontSize: 12 }}>Drag a sub onto a starter to change shape</span>
+            ) : starters.length === XI_SIZE ? (
+              <span style={{ fontSize: 12, color: "var(--live)" }}>Not an allowed formation</span>
+            ) : (
+              <span className="muted" style={{ fontSize: 12 }}>{starters.length}/{XI_SIZE} starters</span>
+            )}
+          </div>
           <div className="pitch-wrap">
             <Pitch
               rows={pitchRows}

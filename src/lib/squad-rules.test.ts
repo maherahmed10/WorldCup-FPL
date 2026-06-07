@@ -5,6 +5,9 @@ import assert from "node:assert/strict";
 import {
   validateSquad,
   isValidFormation,
+  formationName,
+  isNamedFormation,
+  canSwap,
   canAddCountry,
   canAddPosition,
   canFieldFormation,
@@ -170,4 +173,51 @@ test("defaultFormationFor returns a fieldable formation", () => {
   const f = defaultFormationFor(squad);
   assert.ok(f);
   assert.equal(canFieldFormation(squad, f!), true);
+});
+
+// ───────────── allowable named formations (picker restriction) ─────────────
+
+// Build a starting XI for a given line shape (always 1 GK).
+function xi(def: number, mid: number, fwd: number): SquadPlayer[] {
+  return [
+    mk("GK", 50, "A"),
+    ...Array.from({ length: def }, () => mk("DEF", 50, "B")),
+    ...Array.from({ length: mid }, () => mk("MID", 50, "C")),
+    ...Array.from({ length: fwd }, () => mk("FWD", 50, "D")),
+  ];
+}
+
+test("formationName identifies each allowed formation", () => {
+  assert.equal(formationName(xi(4, 3, 3)), "4-3-3");
+  assert.equal(formationName(xi(4, 4, 2)), "4-4-2");
+  assert.equal(formationName(xi(3, 5, 2)), "3-5-2");
+  assert.equal(formationName(xi(5, 3, 2)), "5-3-2");
+});
+
+test("5-4-1 satisfies loose bounds but is NOT an allowed formation", () => {
+  const shape = xi(5, 4, 1);
+  assert.equal(isValidFormation(shape), true); // within line bounds
+  assert.equal(isNamedFormation(shape), false); // but not a named formation
+  assert.equal(formationName(shape), null);
+});
+
+test("canSwap: 4-3-3 → sub a FWD for a MID gives 4-4-2 (allowed)", () => {
+  const starters = xi(4, 3, 3);
+  const fwdOut = starters.find((p) => p.position === "FWD")!;
+  const midIn = mk("MID", 50, "Z");
+  assert.equal(canSwap(starters, fwdOut, midIn), true);
+});
+
+test("canSwap: 4-4-2 → sub a FWD for a DEF would give 5-4-1 (rejected)", () => {
+  const starters = xi(4, 4, 2);
+  const fwdOut = starters.find((p) => p.position === "FWD")!;
+  const defIn = mk("DEF", 50, "Z");
+  assert.equal(canSwap(starters, fwdOut, defIn), false);
+});
+
+test("canSwap: same-position sub is always allowed", () => {
+  const starters = xi(4, 3, 3);
+  const midOut = starters.find((p) => p.position === "MID")!;
+  const midIn = mk("MID", 50, "Z");
+  assert.equal(canSwap(starters, midOut, midIn), true);
 });

@@ -173,9 +173,28 @@ model Fixture {
 
   playerStats PlayerMatchStat[]
   bets        Bet[]
+  odds        FixtureOdds[]
 
   @@index([kickoff])
   @@index([gameweekId])
+}
+
+// FixtureOdds — real match-level odds pulled from API-Football /odds, one row
+// per (fixture, selection). selection matches betting.ts keys: "HOME"/"DRAW"/
+// "AWAY"/"OVER_2.5"/"UNDER_2.5"/"BTTS_YES"/"BTTS_NO". Stored in OUR DB (never
+// called per user request). Odds have a 7-day window upstream, so the sync only
+// finds them for fixtures within ~a week of kickoff (build-plan §5 gotcha #3).
+model FixtureOdds {
+  id         String   @id @default(cuid())
+  fixtureId  String
+  selection  String // e.g. "HOME", "OVER_2.5", "BTTS_YES"
+  multiplier Float // decimal odds, e.g. 2.10
+  updatedAt  DateTime @updatedAt
+
+  fixture Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+
+  @@unique([fixtureId, selection])
+  @@index([fixtureId])
 }
 
 // PlayerMatchStat — the raw feed (/fixtures/players) that settles BOTH

@@ -60,10 +60,41 @@ export const COUNTRIES: Record<string, CountryMeta> = {
   Uzbekistan: { iso: "uz", code: "UZB" },
 };
 
+// Team.name uses spaces + full names ("South Africa", "Bosnia & Herzegovina"),
+// while COUNTRIES keys use the hyphenated Team.country form ("South-Africa",
+// "Bosnia"). Map the name variants → canonical key so flags resolve either way.
+const NAME_ALIASES: Record<string, string> = {
+  "South Africa": "South-Africa",
+  "South Korea": "South-Korea",
+  "Czech Republic": "Czech-Republic",
+  "Cape Verde Islands": "Cape-Verde-Islands",
+  "Congo DR": "Congo-DR",
+  "Ivory Coast": "Ivory-Coast",
+  "New Zealand": "New-Zealand",
+  "Saudi Arabia": "Saudi-Arabia",
+  "Bosnia & Herzegovina": "Bosnia",
+  "Bosnia and Herzegovina": "Bosnia",
+  "United States": "USA",
+  Türkiye: "Turkey",
+  Curaçao: "Curacao",
+};
+
+/** Resolve any country/team string to its canonical COUNTRIES key, or null. */
+function canonical(country: string): string | null {
+  if (COUNTRIES[country]) return country; // exact (hyphenated) key
+  const alias = NAME_ALIASES[country];
+  if (alias && COUNTRIES[alias]) return alias;
+  const hyphenated = country.replace(/\s+/g, "-"); // "South Africa" → "South-Africa"
+  if (COUNTRIES[hyphenated]) return hyphenated;
+  return null;
+}
+
 export function countryIso(country: string): string | null {
-  return COUNTRIES[country]?.iso ?? null;
+  const key = canonical(country);
+  return key ? COUNTRIES[key].iso : null;
 }
 
 export function countryCode(country: string): string {
-  return COUNTRIES[country]?.code ?? country.slice(0, 3).toUpperCase();
+  const key = canonical(country);
+  return key ? COUNTRIES[key].code : country.slice(0, 3).toUpperCase();
 }

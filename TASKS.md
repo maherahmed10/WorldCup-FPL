@@ -1,5 +1,10 @@
 # Tasks — first assignments
 
+> **The first round of lanes (squad / players / predict / leagues / fixtures) is
+> built and merged.** For what's LEFT to do — bet settlement, real points, money
+> betting, the store, transfers, etc. — see **[ROADMAP.md](ROADMAP.md)** and grab
+> a task there. This file is kept for the original lane assignments / reference.
+
 Three of us. The app is split into three ownership lanes that barely overlap, so
 we can all push in parallel. Each lane has a clear design reference, the DB
 models it touches, and acceptance criteria for the first milestone.

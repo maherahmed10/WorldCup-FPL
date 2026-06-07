@@ -139,6 +139,28 @@ export function isValidFormation(starters: SquadPlayer[]): boolean {
   });
 }
 
+/**
+ * Name of the formation a starting XI is in, or null if it doesn't match one of
+ * the allowable named formations (FORMATIONS). Stricter than isValidFormation:
+ * e.g. 5-4-1 satisfies the loose line bounds but is NOT an allowed formation, so
+ * this returns null for it. This is what the picker enforces on swaps + save.
+ */
+export function formationName(starters: SquadPlayer[]): string | null {
+  if (starters.length !== XI_SIZE) return null;
+  const have = countByPosition(starters);
+  return (
+    Object.keys(FORMATIONS).find((name) => {
+      const need = FORMATIONS[name];
+      return (["GK", "DEF", "MID", "FWD"] as Position[]).every((p) => have[p] === need[p]);
+    }) ?? null
+  );
+}
+
+/** Is a starting XI one of the allowable named formations? */
+export function isNamedFormation(starters: SquadPlayer[]): boolean {
+  return formationName(starters) !== null;
+}
+
 /** Can we still add a player of this country without breaking the max-3 rule? */
 export function canAddCountry(players: SquadPlayer[], country: string): boolean {
   return (countByCountry(players)[country] ?? 0) < MAX_PER_COUNTRY;
@@ -219,5 +241,9 @@ export function canSwap(
   const next = starters
     .filter((p) => p.id !== starterOut.id)
     .concat(benchIn);
+  // A cross-position sub must land on one of the allowable named formations
+  // (e.g. 4-3-3 → sub a FWD for a MID → 4-4-2). Shapes that only satisfy the
+  // loose line bounds (e.g. 5-4-1) are rejected.
+  if (next.length === XI_SIZE) return isNamedFormation(next);
   return isValidFormation(next);
 }
