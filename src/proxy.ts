@@ -1,9 +1,9 @@
 // Refreshes the Supabase auth session on every request so Server Components
-// always see a valid session. Standard @supabase/ssr middleware pattern.
+// always see a valid session. Standard @supabase/ssr proxy pattern.
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
