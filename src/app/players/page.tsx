@@ -14,6 +14,7 @@ export default async function PlayersPage() {
   const rows = await db.player.findMany({
     include: {
       team: { select: { country: true, name: true, logoUrl: true } },
+      priceAlt: { select: { price: true } }, // judgement price — preferred for display
       matchStats: {
         select: { fantasyPoints: true, fixture: { select: { kickoff: true } } },
       },

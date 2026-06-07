@@ -36,13 +36,16 @@ interface PlayerRecord {
   id: string;
   name: string;
   position: Position;
-  price: number;
+  price: number; // stats-based (Player.price), used as fallback
+  priceAlt?: { price: number } | null; // judgement-based (PlayerPriceAlt), preferred for display
   team: { country: string; name: string; logoUrl: string | null };
   matchStats: Array<{ fantasyPoints: number | null; fixture: { kickoff: Date } }>;
 }
 
 /** Map a DB player (with team + matchStats) to the view-model. */
 export function toPlayerView(p: PlayerRecord): PlayerView {
+  // Prefer the judgement price; fall back to the stats price if none exists.
+  const priceTenths = p.priceAlt?.price ?? p.price;
   // Only matches that have been settled (fantasyPoints set) count.
   const settled = p.matchStats
     .filter((s) => s.fantasyPoints != null)
@@ -57,7 +60,7 @@ export function toPlayerView(p: PlayerRecord): PlayerView {
     id: p.id,
     name: p.name,
     position: p.position,
-    price: p.price / 10,
+    price: priceTenths / 10,
     country: p.team.country || p.team.name,
     logoUrl: p.team.logoUrl,
     pts,
