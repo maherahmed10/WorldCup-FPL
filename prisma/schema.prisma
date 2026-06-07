@@ -70,6 +70,7 @@ model User {
   id        String   @id @db.Uuid
   email     String   @unique
   name      String
+  teamName  String? // fantasy team display name. Reconciled from the shared DB (added by a teammate).
   createdAt DateTime @default(now())
 
   squads          Squad[]
@@ -109,6 +110,7 @@ model Team {
   country    String
   logoUrl    String?
   eliminated Boolean @default(false)
+  group      String? // group-stage label (e.g. "A"). Reconciled from the shared DB (added by a teammate).
 
   players   Player[]
   homeGames Fixture[] @relation("HomeTeam")
