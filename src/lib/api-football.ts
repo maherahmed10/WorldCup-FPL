@@ -95,7 +95,11 @@ export interface ApiPlayerSeason {
   statistics: Array<{
     league: { name: string; country?: string | null; season?: number };
     games: { appearences: number | null; minutes: number | null; rating: string | null };
-    goals: { total: number | null; assists: number | null };
+    shots: { total: number | null; on: number | null };
+    goals: { total: number | null; conceded: number | null; assists: number | null; saves: number | null };
+    passes: { total: number | null; key: number | null; accuracy: number | null };
+    tackles: { total: number | null; blocks: number | null; interceptions: number | null };
+    dribbles: { attempts: number | null; success: number | null };
   }>;
 }
 

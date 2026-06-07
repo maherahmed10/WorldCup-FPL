@@ -59,25 +59,28 @@ async function playerSeasonThrottled(playerId: number, season: number) {
 }
 
 interface Aggregate {
-  // Raw totals (for the human-readable report).
+  // RAW season totals (summed across competitions) — the scorer turns these
+  // into per-90 rates. Also shown in the report.
   minutes: number;
   goals: number;
   assists: number;
+  shotsOn: number;
+  keyPasses: number;
+  defActions: number;
+  saves: number;
+  conceded: number;
   rating: number | null;
   season: number | null;
-  // League-strength-weighted totals (what pricing actually uses).
-  wMinutes: number;
-  wGoals: number;
-  wAssists: number;
-  wRating: number | null;
+  // Minutes-weighted average competition strength (applied once in the scorer).
+  leagueWeight: number;
 }
 
 // Competitions that fell to the neutral default weight — surfaced at the end so
 // the league table can be tightened.
 const defaultedLeagues = new Map<string, number>();
 
-// Weight a player's per-competition stats by league strength, then sum across
-// all competitions in the first non-empty season.
+// Sum a player's underlying metrics across all competitions in the first
+// non-empty season, and the minutes-weighted average league strength.
 async function fetchProduction(apiPlayerId: number): Promise<Aggregate> {
   for (const season of SEASONS) {
     let rows;
@@ -89,32 +92,41 @@ async function fetchProduction(apiPlayerId: number): Promise<Aggregate> {
     const stats = rows[0]?.statistics ?? [];
     if (stats.length === 0) continue;
 
-    let minutes = 0, goals = 0, assists = 0, ratingMin = 0, ratingSum = 0;
-    let wMinutes = 0, wGoals = 0, wAssists = 0, wRatingMin = 0, wRatingSum = 0;
+    let minutes = 0, goals = 0, assists = 0, shotsOn = 0, keyPasses = 0;
+    let defActions = 0, saves = 0, conceded = 0;
+    let ratingMin = 0, ratingSum = 0, wMinutes = 0;
     for (const s of stats) {
       const m = s.games.minutes ?? 0;
-      const g = s.goals.total ?? 0;
-      const a = s.goals.assists ?? 0;
       const w = leagueWeight(s.league.name, s.league.country);
       if (m > 0 && w === DEFAULT_WEIGHT) {
         const key = `${s.league.name} (${s.league.country ?? "?"})`;
         defaultedLeagues.set(key, (defaultedLeagues.get(key) ?? 0) + 1);
       }
-      minutes += m; goals += g; assists += a;
-      wMinutes += m * w; wGoals += g * w; wAssists += a * w;
+      minutes += m;
+      goals += s.goals.total ?? 0;
+      assists += s.goals.assists ?? 0;
+      shotsOn += s.shots?.on ?? 0;
+      keyPasses += s.passes?.key ?? 0;
+      defActions += (s.tackles?.total ?? 0) + (s.tackles?.interceptions ?? 0) + (s.tackles?.blocks ?? 0);
+      saves += s.goals.saves ?? 0;
+      conceded += s.goals.conceded ?? 0;
+      wMinutes += m * w;
       const r = s.games.rating ? parseFloat(s.games.rating) : NaN;
       if (!Number.isNaN(r) && m > 0) {
         ratingSum += r * m; ratingMin += m;
-        wRatingSum += r * m * w; wRatingMin += m * w;
       }
     }
     if (minutes === 0) continue;
     return {
-      minutes, goals, assists, rating: ratingMin ? ratingSum / ratingMin : null, season,
-      wMinutes, wGoals, wAssists, wRating: wRatingMin ? wRatingSum / wRatingMin : null,
+      minutes, goals, assists, shotsOn, keyPasses, defActions, saves, conceded,
+      rating: ratingMin ? ratingSum / ratingMin : null, season,
+      leagueWeight: wMinutes / minutes,
     };
   }
-  return { minutes: 0, goals: 0, assists: 0, rating: null, season: null, wMinutes: 0, wGoals: 0, wAssists: 0, wRating: null };
+  return {
+    minutes: 0, goals: 0, assists: 0, shotsOn: 0, keyPasses: 0, defActions: 0,
+    saves: 0, conceded: 0, rating: null, season: null, leagueWeight: DEFAULT_WEIGHT,
+  };
 }
 
 // Run an async mapper over items with a small concurrency cap.
@@ -146,11 +158,16 @@ export async function pricePlayers(opts: { write: boolean; limit?: number }) {
     const input: PlayerProduction = {
       id: p.id,
       position: p.position as Position,
-      // League-strength-weighted production drives the price.
-      minutes: agg.wMinutes,
-      goals: agg.wGoals,
-      assists: agg.wAssists,
-      rating: agg.wRating,
+      minutes: agg.minutes,
+      goals: agg.goals,
+      assists: agg.assists,
+      shotsOn: agg.shotsOn,
+      keyPasses: agg.keyPasses,
+      defActions: agg.defActions,
+      saves: agg.saves,
+      conceded: agg.conceded,
+      rating: agg.rating,
+      leagueWeight: agg.leagueWeight,
       teamTier: teamTierFor(p.team.name),
     };
     return { input, name: p.name, team: p.team.name, agg };
@@ -169,7 +186,7 @@ export async function pricePlayers(opts: { write: boolean; limit?: number }) {
   for (const r of rows.slice(0, 15)) {
     console.log(
       `  £${(r.price / 10).toFixed(1).padStart(4)}m  ${r.input.position}  ${r.name.padEnd(22)} ${r.team.padEnd(14)} ` +
-        `(${r.agg.season ?? "—"}: ${r.agg.goals}g ${r.agg.assists}a ${r.agg.minutes}m r${r.agg.rating?.toFixed(2) ?? "—"})`,
+        `(${r.agg.season ?? "—"}: ${r.agg.goals}g ${r.agg.assists}a ${r.agg.shotsOn}sot ${r.agg.keyPasses}kp ${r.agg.minutes}m r${r.agg.rating?.toFixed(2) ?? "—"} lw${r.agg.leagueWeight.toFixed(2)})`,
     );
   }
 

@@ -16,28 +16,67 @@
 
 export type Position = "GK" | "DEF" | "MID" | "FWD";
 
-// Goal weight by position (same shape as the FPL scoring core).
-const GOAL_W: Record<Position, number> = { GK: 6, DEF: 6, MID: 5, FWD: 4 };
-
+// Quality-based production input: RAW season totals (summed across all
+// competitions) of the underlying metrics, plus the minutes-weighted average
+// league strength. The scorer converts these to per-90 RATES so volume (many
+// games / many competitions) no longer dominates — repeatable skill does.
 export interface ProductionInput {
   position: Position;
   minutes: number;
   goals: number;
   assists: number;
-  rating: number | null; // season avg, 0–10; null when unknown
+  shotsOn: number; // shots on target — scoring intent (repeatable)
+  keyPasses: number; // chances created — the assist proxy
+  defActions: number; // tackles + interceptions + blocks
+  saves: number; // GK
+  conceded: number; // goals conceded while on the pitch (GK/DEF clean-sheet proxy)
+  rating: number | null; // season avg, 0–10
+  leagueWeight: number; // minutes-weighted avg competition strength (~0.4–1.05)
 }
 
-/** Rough "if last season were FPL, how many points" — totals-based. */
+// Minutes needed before per-90 rates are fully trusted (~17 full matches).
+const MINUTES_FOR_TRUST = 1500;
+const RATING_BASE = 6.6; // league-average-ish; only rating above this adds value
+
+/**
+ * Position-aware quality score from per-90 underlying rates. Per-90 kills the
+ * volume bias; a minutes-reliability damper kills small-sample flukes; the
+ * league weight (applied once, at the end) restores competition context that
+ * per-90 rates would otherwise erase. Goals/assists stay in the mix so players
+ * from lower-coverage leagues (null shots/key-passes) aren't zeroed.
+ */
 export function productionScore(p: ProductionInput): number {
   const minutes = Math.max(0, p.minutes);
-  const nineties = minutes / 90;
-  const appearance = nineties * 2; // ~2 pts per full match played
-  const goals = Math.max(0, p.goals) * GOAL_W[p.position];
-  const assists = Math.max(0, p.assists) * 3;
-  // Reward a high rating sustained across many minutes (not a one-game fluke).
-  const rating = p.rating ?? 6.5;
-  const ratingBonus = Math.max(0, rating - 6.5) * nineties * 1.5;
-  return appearance + goals + assists + ratingBonus;
+  if (minutes <= 0) return 0;
+  const per90 = (x: number) => (Math.max(0, x) * 90) / minutes;
+  const reliability = Math.min(1, minutes / MINUTES_FOR_TRUST);
+
+  const threat = per90(p.shotsOn) * 5 + per90(p.goals) * 6; // attempts on target + finishing
+  const creation = per90(p.keyPasses) * 3 + per90(p.assists) * 5; // chances + assists
+  const defense = per90(p.defActions) * 2.5;
+  const cleanSheet = Math.max(0, 1.3 - per90(p.conceded)); // higher when conceding little
+
+  const ratingBonus = Math.max(0, (p.rating ?? RATING_BASE) - RATING_BASE) * 6;
+
+  let base: number;
+  switch (p.position) {
+    case "FWD":
+      base = threat * 1.0 + creation * 0.5;
+      break;
+    case "MID":
+      base = threat * 0.6 + creation * 1.0 + defense * 0.5;
+      break;
+    case "DEF":
+      base = defense * 1.0 + creation * 0.5 + threat * 0.3 + cleanSheet * 3;
+      break;
+    case "GK": {
+      const shotsFaced = p.saves + p.conceded;
+      const savePct = shotsFaced > 0 ? p.saves / shotsFaced : 0.6;
+      base = savePct * 7 + per90(p.saves) * 0.6 + cleanSheet * 5;
+      break;
+    }
+  }
+  return (base + ratingBonus) * reliability * p.leagueWeight;
 }
 
 // ── Hand-coded nation strength tiers (keyed by Team.name as stored in our DB) ──
