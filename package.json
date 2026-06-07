@@ -16,6 +16,7 @@
     "seed": "tsx prisma/seed.ts",
     "sync": "tsx src/jobs/sync.ts",
     "settle": "tsx src/jobs/settle.ts",
+    "load-prices": "tsx scripts/load-prices.ts",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {

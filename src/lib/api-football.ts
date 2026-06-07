@@ -57,6 +57,18 @@ export interface ApiFixture {
   goals: { home: number | null; away: number | null };
 }
 
+// Group standings — /standings?league=1&season=2026.
+// Each entry has `group` ("Group A" … "Group L") and `team.id`.
+// Used to populate Team.group which drives correct group-table labeling.
+export interface ApiStandingEntry {
+  group: string;
+  team: { id: number; name: string };
+}
+
+export interface ApiStanding {
+  league: { standings: ApiStandingEntry[][] };
+}
+
 // Official tournament squad per team — /players/squads?team=X.
 // This is the correct roster source pre-tournament: /players?league=...&season=...
 // returns 0 until matches generate stats, but squads are populated now.
@@ -101,6 +113,9 @@ export const apiFootball = {
   // Official 26-man squad for one team — the roster source for the player pool.
   // Loop over all 48 teams (one request each) to build the full pool.
   squad: (teamId: number) => get<ApiSquad>(`/players/squads?team=${teamId}`),
+
+  standings: () =>
+    get<ApiStanding>(`/standings?league=${WORLD_CUP_LEAGUE}&season=${SEASON}`),
 
   // Per-fixture player stats — the settlement feed.
   fixturePlayers: (fixtureId: number) =>

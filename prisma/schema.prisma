@@ -108,7 +108,7 @@ model Team {
   apiTeamId  Int     @unique // API-Football team id
   name       String
   country    String
-  group      String? // group-stage group label, e.g. "Group A" (Lane 3 / fixtures)
+  group      String? // group-stage group label "Group A"…"Group L" (from /standings)
   logoUrl    String?
   eliminated Boolean @default(false)
 
