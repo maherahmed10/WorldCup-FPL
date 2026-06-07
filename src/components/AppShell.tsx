@@ -11,6 +11,7 @@ const NAV = [
   { id: "team", label: "My Team", icon: "team", href: "/team" },
   { id: "players", label: "Players", icon: "players", href: "/players" },
   { id: "predict", label: "Predictions", icon: "predictions", href: "/predict" },
+  { id: "store", label: "Store", icon: "store", href: "/store" },
   { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues" },
   { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures" },
 ];

@@ -25,8 +25,16 @@ export type MarketType =
   | "PLAYER_ASSIST"
   | "PLAYER_CARD";
 
-/** Per-gameweek points wallet. Tunable (§12) — the only place the number lives. */
+/** @deprecated Use User.bettingBalance from the DB — kept for legacy tests only. */
 export const STARTING_BALANCE = 1000;
+
+/** Starting virtual £ bank credited to each new user. Matches User.bettingBalance DB default. */
+export const STARTING_MONEY = 1000;
+
+/** Format a money amount as a £ string with thousands separator, e.g. 10000 → "£10,000". */
+export function formatMoney(amount: number): string {
+  return `£${amount.toLocaleString("en-GB")}`;
+}
 
 /** Smallest legal stake. */
 export const MIN_STAKE = 1;

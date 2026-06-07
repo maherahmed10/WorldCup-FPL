@@ -4,6 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
 import { getCurrentGameweek, getActiveSquad } from "@/lib/squad-data";
+import { getMaxPerCountry, type PerkLike } from "@/lib/store";
 import { SquadPicker, type PickerPlayer } from "./SquadPicker";
 
 export default async function SquadPage() {
@@ -13,11 +14,17 @@ export default async function SquadPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // Full pool — 1,248 players. Light projection (the picker only needs these).
-  const players = await db.player.findMany({
-    include: { team: true },
-    orderBy: [{ price: "desc" }, { name: "asc" }],
-  });
+  const [players, rawPerks, gameweek] = await Promise.all([
+    db.player.findMany({
+      include: { team: true },
+      orderBy: [{ price: "desc" }, { name: "asc" }],
+    }),
+    db.userPerk.findMany({
+      where: { userId: user.id },
+      select: { storeItemId: true, gameweekId: true, usedAt: true },
+    }),
+    getCurrentGameweek(),
+  ]);
 
   const pool: PickerPlayer[] = players.map((p) => ({
     id: p.id,
@@ -27,7 +34,9 @@ export default async function SquadPage() {
     country: p.team.country,
   }));
 
-  const gameweek = await getCurrentGameweek();
+  const perks = rawPerks as PerkLike[];
+  const maxPerCountry = getMaxPerCountry(perks);
+
   const existing = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
 
   return (
@@ -37,6 +46,7 @@ export default async function SquadPage() {
       initialStarterIds={existing?.players.filter((p) => p.isStarting).map((p) => p.id) ?? []}
       initialBenchIds={existing?.players.filter((p) => !p.isStarting).map((p) => p.id) ?? []}
       initialCaptainId={existing?.captainId ?? null}
+      maxPerCountry={maxPerCountry}
     />
   );
 }

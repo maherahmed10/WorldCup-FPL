@@ -110,3 +110,27 @@ test("scorerMultiplier: clamped to [1.6, 8.0] and 2dp", () => {
   assert.ok(hi <= 8.0 && lo >= 1.6);
   assert.equal(Math.round(hi * 100) / 100, hi); // already 2dp
 });
+
+// ── Money economy (2.1) ────────────────────────────────────────────────────
+
+test("money balance: availableBalance uses STARTING_MONEY correctly", () => {
+  const bets: BetLike[] = [{ stake: 100, multiplier: 2.0, status: "WON" }];
+  // STARTING_MONEY is 1000; -100 stake + 200 payout = 1100
+  assert.equal(availableBalance(bets, STARTING_BALANCE), 1100);
+});
+
+test("money balance: can't stake more than bettingBalance", () => {
+  const balance = 350;
+  assert.equal(canPlaceBet(350, balance), true);  // exact balance is fine
+  assert.equal(canPlaceBet(351, balance), false); // one over
+  assert.equal(canPlaceBet(0, balance), false);   // zero stake
+});
+
+test("money payout rounding: £ amounts behave identically to points math", () => {
+  // £50 at 3.3x → 165 (165.0 exactly)
+  assert.equal(payout(50, 3.3, "WON"), 165);
+  // £33 at 1.95x → 64 (rounds down from 64.35)
+  assert.equal(payout(33, 1.95, "WON"), 64);
+  // Void always refunds the exact stake in £
+  assert.equal(payout(75, 9.9, "VOID"), 75);
+});

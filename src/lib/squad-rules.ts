@@ -77,7 +77,11 @@ export interface ValidationResult {
 }
 
 /** Validate a full 15-player squad against the FPL rules. */
-export function validateSquad(players: SquadPlayer[]): ValidationResult {
+export function validateSquad(
+  players: SquadPlayer[],
+  opts?: { maxPerCountry?: number },
+): ValidationResult {
+  const maxPerCountry = opts?.maxPerCountry ?? MAX_PER_COUNTRY;
   const errors: ValidationError[] = [];
   const total = players.length;
   const spent = totalPrice(players);
@@ -91,12 +95,12 @@ export function validateSquad(players: SquadPlayer[]): ValidationResult {
     });
   }
 
-  // Max 3 per country
+  // Max per country (default 3, raised to 4 with country_slot perk)
   for (const [country, n] of Object.entries(countByCountry(players))) {
-    if (n > MAX_PER_COUNTRY) {
+    if (n > maxPerCountry) {
       errors.push({
         type: "country",
-        message: `Max ${MAX_PER_COUNTRY} players per country — you have ${n} from ${country}.`,
+        message: `Max ${maxPerCountry} players per country — you have ${n} from ${country}.`,
       });
     }
   }
@@ -161,9 +165,13 @@ export function isNamedFormation(starters: SquadPlayer[]): boolean {
   return formationName(starters) !== null;
 }
 
-/** Can we still add a player of this country without breaking the max-3 rule? */
-export function canAddCountry(players: SquadPlayer[], country: string): boolean {
-  return (countByCountry(players)[country] ?? 0) < MAX_PER_COUNTRY;
+/** Can we still add a player of this country without breaking the max-per-country rule? */
+export function canAddCountry(
+  players: SquadPlayer[],
+  country: string,
+  maxPerCountry = MAX_PER_COUNTRY,
+): boolean {
+  return (countByCountry(players)[country] ?? 0) < maxPerCountry;
 }
 
 /** Can we still add a player of this position without exceeding the quota? */

@@ -6,10 +6,8 @@
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
 import {
-  availableBalance,
   matchMarkets,
   scorerMultiplier,
-  type BetLike,
   type MarketType,
 } from "@/lib/betting";
 import { judgementScorerOdds } from "@/lib/scorer-odds";
@@ -160,7 +158,8 @@ export default async function PredictPage() {
       })
     : [];
 
-  const balance = availableBalance(rawBets as BetLike[]);
+  // Balance comes directly from the persisted User.bettingBalance field.
+  const balance = user?.bettingBalance ?? 1000;
 
   // Resolve player names referenced by any player-prop selections.
   const propIds = rawBets

@@ -65,15 +65,16 @@ export function scoreMatch(s: MatchStatLine): number {
 }
 
 /**
- * Gameweek total for a squad: sum starting XI, captain scores x2.
- * (Bench/auto-sub logic is a later refinement — §10 cut-list.)
+ * Gameweek total for a squad: sum starting XI, captain scores ×captainMultiplier.
+ * captainMultiplier defaults to 2; pass 3 when the user has the extra_captain perk.
  */
 export function scoreSquadGameweek(
   starters: Array<{ playerId: string; points: number }>,
   captainId: string | null,
+  captainMultiplier = 2,
 ): number {
   return starters.reduce((total, p) => {
-    const mult = p.playerId === captainId ? 2 : 1;
+    const mult = p.playerId === captainId ? captainMultiplier : 1;
     return total + p.points * mult;
   }, 0);
 }
