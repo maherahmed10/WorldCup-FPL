@@ -9,9 +9,47 @@ import {
   canPlaceBet,
   matchMarkets,
   scorerMultiplier,
+  parsePlayerProp,
+  settlePlayerProp,
   STARTING_BALANCE,
   type BetLike,
+  type PlayerPropStat,
 } from "./betting.js";
+
+const stat = (over: Partial<PlayerPropStat>): PlayerPropStat => ({
+  minutes: 90,
+  goals: 0,
+  assists: 0,
+  yellowCards: 0,
+  redCards: 0,
+  ...over,
+});
+
+test("parsePlayerProp: valid kinds parse, others reject", () => {
+  assert.deepEqual(parsePlayerProp("scorer:abc"), { kind: "scorer", playerId: "abc" });
+  assert.deepEqual(parsePlayerProp("assist:p1"), { kind: "assist", playerId: "p1" });
+  assert.deepEqual(parsePlayerProp("card:p2"), { kind: "card", playerId: "p2" });
+  assert.equal(parsePlayerProp("HOME"), null);
+  assert.equal(parsePlayerProp("scorer:"), null);
+});
+
+test("settlePlayerProp: scorer/assist won from match stats, else lost", () => {
+  assert.equal(settlePlayerProp("scorer", stat({ goals: 1 })), "WON");
+  assert.equal(settlePlayerProp("scorer", stat({ goals: 0 })), "LOST");
+  assert.equal(settlePlayerProp("assist", stat({ assists: 2 })), "WON");
+  assert.equal(settlePlayerProp("assist", stat({ assists: 0 })), "LOST");
+});
+
+test("settlePlayerProp: card won on yellow or red", () => {
+  assert.equal(settlePlayerProp("card", stat({ yellowCards: 1 })), "WON");
+  assert.equal(settlePlayerProp("card", stat({ redCards: 1 })), "WON");
+  assert.equal(settlePlayerProp("card", stat({})), "LOST");
+});
+
+test("settlePlayerProp: didn't feature → VOID (refund)", () => {
+  assert.equal(settlePlayerProp("scorer", null), "VOID");
+  assert.equal(settlePlayerProp("scorer", stat({ minutes: 0, goals: 0 })), "VOID");
+});
 
 test("payout: won → round(stake × multiplier)", () => {
   assert.equal(payout(100, 2.0, "WON"), 200);

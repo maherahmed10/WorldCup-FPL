@@ -9,6 +9,7 @@ import {
   availableBalance,
   matchMarkets,
   scorerMultiplier,
+  PLAYER_PROP_MULTIPLIER,
   type BetLike,
   type MarketType,
 } from "@/lib/betting";
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_FIXTURES = 10;
 const SCORERS_PER_TEAM = 3;
+const CARDS_PER_TEAM = 2;
 
 const MARKET_LABEL: Record<MarketType, string> = {
   MATCH_RESULT: "Match Result",
@@ -109,6 +111,21 @@ export default async function PredictPage() {
     scorersByTeam.set(a.teamId, list);
   }
 
+  // Card-prone candidates (defenders / defensive mids) → "to be carded" market.
+  const defenders = teamIds.length
+    ? await db.player.findMany({
+        where: { teamId: { in: teamIds }, position: { in: ["DEF", "MID"] } },
+        select: { id: true, name: true, teamId: true },
+        orderBy: [{ price: "desc" }, { name: "asc" }],
+      })
+    : [];
+  const cardsByTeam = new Map<string, Array<{ id: string; name: string }>>();
+  for (const d of defenders) {
+    const list = cardsByTeam.get(d.teamId) ?? [];
+    if (list.length < CARDS_PER_TEAM) list.push({ id: d.id, name: d.name });
+    cardsByTeam.set(d.teamId, list);
+  }
+
   const markets: FixtureMarketsView[] = fixtures.map((f) => {
     // Real per-fixture odds (selection → multiplier); empty until syncOdds runs.
     const oddsMap = Object.fromEntries(f.odds.map((o) => [o.selection, o.multiplier]));
@@ -130,6 +147,32 @@ export default async function PredictPage() {
           selection: `scorer:${s.id}`,
           // Resolution: curated judgement for elite finishers → position/price formula.
           multiplier: judgementScorerOdds(s.name) ?? scorerMultiplier(s.position, s.price),
+        })),
+      });
+      // To Assist — same creative pool, fixed multiplier (our own market, §7).
+      groups.push({
+        marketType: "PLAYER_ASSIST",
+        label: MARKET_LABEL.PLAYER_ASSIST,
+        options: scorers.map((s) => ({
+          name: s.name,
+          selection: `assist:${s.id}`,
+          multiplier: PLAYER_PROP_MULTIPLIER.PLAYER_ASSIST,
+        })),
+      });
+    }
+    // To Be Carded — defenders / defensive mids, fixed multiplier.
+    const cardCandidates = [
+      ...(cardsByTeam.get(f.homeTeamId) ?? []),
+      ...(cardsByTeam.get(f.awayTeamId) ?? []),
+    ];
+    if (cardCandidates.length) {
+      groups.push({
+        marketType: "PLAYER_CARD",
+        label: MARKET_LABEL.PLAYER_CARD,
+        options: cardCandidates.map((c) => ({
+          name: c.name,
+          selection: `card:${c.id}`,
+          multiplier: PLAYER_PROP_MULTIPLIER.PLAYER_CARD,
         })),
       });
     }

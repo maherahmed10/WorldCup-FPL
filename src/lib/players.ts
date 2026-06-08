@@ -58,7 +58,9 @@ export function toPlayerView(p: PlayerRecord): PlayerView {
     name: p.name,
     position: p.position,
     price: p.price / 10,
-    country: p.team.country || p.team.name,
+    // Use the clean team name for display + Flag (Team.country holds hyphenated
+    // variants like "South-Africa"); both resolve to a flag, the name reads better.
+    country: p.team.name,
     logoUrl: p.team.logoUrl,
     pts,
     ppg,

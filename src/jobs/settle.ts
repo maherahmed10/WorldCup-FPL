@@ -10,9 +10,39 @@
 import { db } from "@/lib/db";
 import { apiFootball } from "@/lib/api-football";
 import { scoreMatch, type MatchStatLine, type Position } from "@/lib/scoring";
+import { parsePlayerProp, settlePlayerProp, payout } from "@/lib/betting";
 
 function n(v: number | null | undefined): number {
   return v ?? 0;
+}
+
+// Resolve OPEN player-prop bets on a fixture from the just-written PlayerMatchStat
+// rows (ROADMAP 3.4). Idempotent — only touches OPEN bets, so re-running is safe.
+// Match-market settlement (HOME/OVER_2.5/…) is ROADMAP 1.1.
+async function settlePlayerPropBets(fixtureId: string): Promise<number> {
+  const bets = await db.bet.findMany({
+    where: {
+      fixtureId,
+      status: "OPEN",
+      marketType: { in: ["PLAYER_SCORER", "PLAYER_ASSIST", "PLAYER_CARD"] },
+    },
+  });
+  let settled = 0;
+  for (const bet of bets) {
+    const parsed = parsePlayerProp(bet.selection);
+    if (!parsed) continue;
+    const stat = await db.playerMatchStat.findUnique({
+      where: { playerId_fixtureId: { playerId: parsed.playerId, fixtureId } },
+      select: { minutes: true, goals: true, assists: true, yellowCards: true, redCards: true },
+    });
+    const status = settlePlayerProp(parsed.kind, stat);
+    await db.bet.update({
+      where: { id: bet.id },
+      data: { status, payout: payout(bet.stake, bet.multiplier, status) },
+    });
+    settled++;
+  }
+  return settled;
 }
 
 export async function settleFixture(apiFixtureId: number) {
@@ -61,7 +91,10 @@ export async function settleFixture(apiFixtureId: number) {
       written++;
     }
   }
-  console.log(`✓ settled fixture ${apiFixtureId}: ${written} player stat rows`);
+  const propBets = await settlePlayerPropBets(fixture.id);
+  console.log(
+    `✓ settled fixture ${apiFixtureId}: ${written} player stat rows, ${propBets} player-prop bets`,
+  );
   return written;
 }
 

@@ -175,3 +175,50 @@ export function matchMarkets(
     },
   ];
 }
+
+// ───────────────────────── Player-prop settlement (§7, ROADMAP 3.4) ─────────
+// Player props are stored as `Bet.selection = "<kind>:<playerId>"` where kind is
+// scorer | assist | card. They settle from the player's PlayerMatchStat for the
+// fixture — the same feed that settles fantasy points.
+
+export type PlayerPropKind = "scorer" | "assist" | "card";
+
+/** The slice of a player's match stat a prop needs. */
+export interface PlayerPropStat {
+  minutes: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+}
+
+/** Parse a player-prop selection ("scorer:abc123") → {kind, playerId}, or null. */
+export function parsePlayerProp(
+  selection: string,
+): { kind: PlayerPropKind; playerId: string } | null {
+  const [kind, playerId] = selection.split(":");
+  if (playerId && (kind === "scorer" || kind === "assist" || kind === "card")) {
+    return { kind, playerId };
+  }
+  return null;
+}
+
+/**
+ * Settle a player-prop bet from the player's match stat.
+ *   • didn't feature (no stat row, or 0 minutes) → VOID (stake refunded)
+ *   • scorer → WON if goals > 0
+ *   • assist → WON if assists > 0
+ *   • card   → WON if any yellow or red
+ * else LOST.
+ */
+export function settlePlayerProp(kind: PlayerPropKind, stat: PlayerPropStat | null): BetStatus {
+  if (!stat || stat.minutes <= 0) return "VOID";
+  switch (kind) {
+    case "scorer":
+      return stat.goals > 0 ? "WON" : "LOST";
+    case "assist":
+      return stat.assists > 0 ? "WON" : "LOST";
+    case "card":
+      return stat.yellowCards > 0 || stat.redCards > 0 ? "WON" : "LOST";
+  }
+}
