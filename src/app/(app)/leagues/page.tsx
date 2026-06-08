@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"; // standings change after every settleme
 
 import { db } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
+import { rankStandings } from "@/lib/leagues";
 import { LeaguesClient, type LeagueData } from "@/components/LeaguesClient";
 
 // Local shape for the nested Prisma query result. Keeps callback params typed
@@ -91,19 +92,23 @@ export default async function LeaguesPage() {
       // Cast to local types — shape matches the include above.
       const rows = raw as unknown as LeagueRow[];
 
-      leagues = rows.map((league: LeagueRow) => ({
-        id: league.id,
-        name: league.name,
-        joinCode: league.joinCode,
-        memberCount: league.members.length,
-        isOwner: league.ownerId === userId,
-        members: league.members.map((m: MemberRow) => ({
+      leagues = rows.map((league: LeagueRow) => {
+        // Compute raw points per member, then rank + movement (pure helper).
+        const rawMembers = league.members.map((m: MemberRow) => ({
           userId: m.userId,
           name: m.user.name,
           totalPoints: computePoints(m.user.squads),
           gwPoints: computePoints(m.user.squads, true),
-        })),
-      }));
+        }));
+        return {
+          id: league.id,
+          name: league.name,
+          joinCode: league.joinCode,
+          memberCount: league.members.length,
+          isOwner: league.ownerId === userId,
+          members: rankStandings(rawMembers), // adds rank + delta, sorted
+        };
+      });
     } catch {
       // DB not reachable — render empty state.
     }

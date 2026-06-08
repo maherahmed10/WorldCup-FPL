@@ -2,7 +2,6 @@
 
 import { useActionState, useState, useRef, useEffect } from "react";
 import { createLeague, joinLeague, type ActionResult } from "@/app/(app)/leagues/actions";
-import { sortLeagueStandings } from "@/lib/leagues";
 
 // ── Types (serialisable — passed from server component) ─────────────────────
 
@@ -11,6 +10,8 @@ export interface LeagueMemberRow {
   name: string;
   gwPoints: number;
   totalPoints: number;
+  rank: number; // 1-based standings position (ties share a rank)
+  delta: number; // places moved this gameweek: + up, − down, 0 same
 }
 
 export interface LeagueData {
@@ -58,7 +59,8 @@ export function LeaguesClient({ leagues: initialLeagues, userId }: Props) {
   };
 
   const active = leagues.find((l) => l.id === activeId) ?? leagues[0] ?? null;
-  const sorted = active ? sortLeagueStandings(active.members) : [];
+  // Members arrive already ranked + sorted (rankStandings on the server).
+  const sorted = active ? active.members : [];
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -207,6 +209,28 @@ export function LeaguesClient({ leagues: initialLeagues, userId }: Props) {
 
 // ── Standings table ──────────────────────────────────────────────────────────
 
+// Small up/down/same indicator for rank movement this gameweek.
+function RankMovement({ delta }: { delta: number }) {
+  if (delta === 0) {
+    return (
+      <span className="text-xs" style={{ color: "var(--text-3)" }} title="No change">
+        –
+      </span>
+    );
+  }
+  const up = delta > 0;
+  return (
+    <span
+      className="text-xs font-bold tabular-nums"
+      style={{ color: up ? "var(--accent)" : "var(--live)" }}
+      title={`${up ? "Up" : "Down"} ${Math.abs(delta)} this round`}
+    >
+      {up ? "▲" : "▼"}
+      {Math.abs(delta)}
+    </span>
+  );
+}
+
 function StandingsTable({
   rows,
   view,
@@ -239,7 +263,7 @@ function StandingsTable({
         <span className="text-right">{view === "gw" ? "Round" : "GW"}</span>
         <span className="text-right">{view === "gw" ? "Round pts" : "Total"}</span>
       </div>
-      {rows.map((row, i) => {
+      {rows.map((row) => {
         const isYou = row.userId === currentUserId;
         return (
           <div
@@ -250,11 +274,14 @@ function StandingsTable({
               background: isYou ? "rgba(24,224,138,0.06)" : undefined,
             }}
           >
-            <span
-              className="font-[family-name:var(--font-display)] text-sm font-bold tabular-nums"
-              style={{ color: "var(--text-3)" }}
-            >
-              {i + 1}
+            <span className="flex items-center gap-1.5">
+              <span
+                className="font-[family-name:var(--font-display)] text-sm font-bold tabular-nums"
+                style={{ color: "var(--text-3)" }}
+              >
+                {row.rank}
+              </span>
+              <RankMovement delta={row.delta} />
             </span>
             <span>
               <div className="flex items-center gap-2">
