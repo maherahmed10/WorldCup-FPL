@@ -17,6 +17,8 @@ import {
 } from "@/lib/gameweeks";
 import type { Position } from "@prisma/client";
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 // ── Gameweeks: seed the calendar buckets (§4). Run once; safe to re-run. ──
 export async function syncGameweeks() {
   for (const g of GAMEWEEK_DEFS) {
@@ -215,13 +217,28 @@ export async function syncPlayerProfiles(minPriceTenths = 0) {
   let i = 0;
   for (const p of players) {
     i++;
+    // Rate-limit: Pro plan allows ~300 req/min. Pace at ~4/sec (250ms) and
+    // retry on 429 (per-minute limit) with backoff so the run completes.
     let resp;
-    try {
-      resp = await apiFootball.playerProfileById(p.apiPlayerId);
-    } catch (e) {
-      console.error(`  ✗ profile ${p.apiPlayerId}:`, (e as Error).message);
-      continue;
+    let attempt = 0;
+    for (;;) {
+      try {
+        resp = await apiFootball.playerProfileById(p.apiPlayerId);
+        break;
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (msg.includes("429") && attempt < 4) {
+          attempt++;
+          await sleep(2000 * attempt); // 2s, 4s, 6s, 8s backoff
+          continue;
+        }
+        console.error(`  ✗ profile ${p.apiPlayerId}:`, msg);
+        resp = null;
+        break;
+      }
     }
+    await sleep(250); // pace requests (~4/sec, well under 300/min)
+    if (!resp) continue;
     const entry = resp[0];
     if (!entry) continue; // no record this season
     const s = aggregateStats(entry.statistics);
