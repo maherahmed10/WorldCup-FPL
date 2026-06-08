@@ -17,6 +17,7 @@
     "sync": "tsx src/jobs/sync.ts",
     "settle": "tsx src/jobs/settle.ts",
     "load-prices": "tsx scripts/load-prices.ts",
+    "price-review": "tsx scripts/price-review.ts",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
