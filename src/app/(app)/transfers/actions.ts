@@ -83,13 +83,47 @@ export async function saveTransfers(
       });
     }
 
-    // Remove old squad players and add new ones
+    // Rebuild the squad, PRESERVING each slot's starting/bench status.
+    // - retained players keep their existing isStarting
+    // - an incoming player inherits the slot of an outgoing player of the SAME
+    //   position (so the formation stays intact); fall back to a free out-slot.
+    const prevStarting = new Map(squad.players.map((p) => [p.playerId, p.isStarting]));
+    const outgoing = squad.players.filter((p) => !newSet.has(p.playerId));
+    const incoming = newPlayerIds.filter((id) => !currentIds.has(id));
+
+    // Map incoming → an outgoing player's isStarting, matching by position.
+    const positions = new Map(
+      (
+        await tx.player.findMany({
+          where: { id: { in: [...incoming, ...outgoing.map((o) => o.playerId)] } },
+          select: { id: true, position: true },
+        })
+      ).map((p) => [p.id, p.position]),
+    );
+    const outByPos = new Map<string, boolean[]>(); // position → queue of isStarting slots
+    for (const o of outgoing) {
+      const pos = positions.get(o.playerId) ?? "";
+      const q = outByPos.get(pos) ?? [];
+      q.push(o.isStarting);
+      outByPos.set(pos, q);
+    }
+    const inheritedStarting = new Map<string, boolean>();
+    for (const inId of incoming) {
+      const pos = positions.get(inId) ?? "";
+      const q = outByPos.get(pos);
+      // Take a same-position out-slot; default to bench if none (shouldn't happen
+      // for a valid like-for-like transfer, but is safe).
+      inheritedStarting.set(inId, q && q.length ? q.shift()! : false);
+    }
+
     await tx.squadPlayer.deleteMany({ where: { squadId: squad.id } });
     await tx.squadPlayer.createMany({
       data: newPlayerIds.map((playerId) => ({
         squadId: squad.id,
         playerId,
-        isStarting: true, // caller manages starting/bench; keep all starting for now
+        isStarting: currentIds.has(playerId)
+          ? (prevStarting.get(playerId) ?? true) // retained: keep its slot
+          : (inheritedStarting.get(playerId) ?? false), // incoming: inherit out-slot
       })),
     });
 
