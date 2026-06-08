@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
+import { WelcomeModal } from "@/components/WelcomeModal";
 import { db } from "@/lib/db";
 
 export default async function AppLayout({
@@ -33,10 +34,14 @@ export default async function AppLayout({
   });
 
   return (
-    <AppShell
-      user={{ name: appUser.teamName ?? appUser.name, handle: appUser.email }}
-    >
-      {children}
-    </AppShell>
+    <>
+      <AppShell
+        user={{ name: appUser.teamName ?? appUser.name, handle: appUser.email }}
+      >
+        {children}
+      </AppShell>
+      {/* First-login onboarding — shows once per account (User.onboardedAt). */}
+      <WelcomeModal firstLogin={!appUser.onboardedAt} />
+    </>
   );
 }

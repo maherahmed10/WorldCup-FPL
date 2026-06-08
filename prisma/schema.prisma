@@ -72,6 +72,7 @@ model User {
   name           String
   teamName       String?
   bettingBalance Int      @default(1000) // virtual £ bank — deducted on bet/purchase, credited on win/void
+  onboardedAt    DateTime? // set when the first-login Welcome guide is dismissed (null = not onboarded yet)
   createdAt      DateTime @default(now())
 
   squads          Squad[]

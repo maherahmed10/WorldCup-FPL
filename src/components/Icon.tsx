@@ -1,6 +1,8 @@
 // Icon set ported from design/icons.jsx. Outline, 24x24, currentColor.
 // Usage: <Icon name="team" size={20} />
 const PATHS: Record<string, string> = {
+  home: "M4 11l8-7 8 7M6 10v9h5v-5h2v5h5v-9",
+  arrowright: "M5 12h14M13 6l6 6-6 6",
   team: "M8 4l-4 2 1.5 3L8 8v12h8V8l2.5 1L20 6l-4-2a4 4 0 01-8 0z",
   players: "M3 6h7v5H3zM14 6h7v5h-7zM3 13h7v5H3zM14 13h7v5h-7z",
   predictions: "M12 3a9 9 0 100 18 9 9 0 000-18zm0 4a5 5 0 100 10 5 5 0 000-10zm0 4a1 1 0 100 2 1 1 0 000-2z",

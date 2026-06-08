@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 
 const NAV = [
+  { id: "home", label: "Home", icon: "home", href: "/home" },
   { id: "team", label: "My Team", icon: "team", href: "/team" },
   { id: "players", label: "Players", icon: "players", href: "/players" },
   { id: "predict", label: "Predictions", icon: "predictions", href: "/predict" },
@@ -46,10 +47,10 @@ export function AppShell({
     <div className="app">
       {/* ---- desktop sidebar ---- */}
       <aside className="sidebar">
-        <div className="brand">
+        <Link href="/home" className="brand" style={{ textDecoration: "none", color: "inherit" }}>
           <div className="brand-mark">G</div>
           <div className="brand-name">GAFFER</div>
-        </div>
+        </Link>
         <nav className="nav">
           {NAV.map((n) => (
             <Link
@@ -90,14 +91,14 @@ export function AppShell({
 
       {/* ---- mobile top bar ---- */}
       <header className="topbar">
-        <div className="brand" style={{ padding: 0 }}>
+        <Link href="/home" className="brand" style={{ padding: 0, textDecoration: "none", color: "inherit" }}>
           <div className="brand-mark" style={{ width: 30, height: 30, fontSize: 17 }}>
             G
           </div>
           <div className="brand-name" style={{ fontSize: 19 }}>
             GAFFER
           </div>
-        </div>
+        </Link>
         <div className="row" style={{ gap: 6 }}>
           <div
             className="avatar"
