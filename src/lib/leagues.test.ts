@@ -6,7 +6,9 @@ import {
   generateJoinCode,
   sortGroupStandings,
   sortLeagueStandings,
+  rankStandings,
   type GroupTableRow,
+  type LeagueStandingRow,
 } from "./leagues.js";
 
 // ── Join code ──────────────────────────────────────────────────────────────
@@ -96,4 +98,48 @@ test("sortLeagueStandings: does not mutate the input array", () => {
   ];
   sortLeagueStandings(rows);
   assert.equal(rows[0].userId, "x");
+});
+
+// ── rankStandings: ranks + movement ──────────────────────────────────────────
+
+const lr = (userId: string, total: number, gw: number): LeagueStandingRow => ({
+  userId,
+  name: userId.toUpperCase(),
+  totalPoints: total,
+  gwPoints: gw,
+});
+
+test("rankStandings: assigns 1-based ranks by total points", () => {
+  const ranked = rankStandings([lr("a", 100, 10), lr("b", 250, 30), lr("c", 180, 5)]);
+  // sorted b(250) > c(180) > a(100)
+  assert.deepEqual(
+    ranked.map((r) => [r.userId, r.rank]),
+    [["b", 1], ["c", 2], ["a", 3]],
+  );
+});
+
+test("rankStandings: ties share a rank (standard competition ranking)", () => {
+  // a and b both 200 total + 10 gw → tie at rank 1; c is 3rd (not 2nd)
+  const ranked = rankStandings([lr("a", 200, 10), lr("b", 200, 10), lr("c", 150, 5)]);
+  const byUser = Object.fromEntries(ranked.map((r) => [r.userId, r.rank]));
+  assert.equal(byUser.a, 1);
+  assert.equal(byUser.b, 1);
+  assert.equal(byUser.c, 3);
+});
+
+test("rankStandings: delta reflects movement vs before this gameweek", () => {
+  // Before this GW (strip gwPoints):
+  //   a: 100-40=60, b: 90-5=85, c: 80-0=80  → prev order b(1) c(2) a(3)
+  // Now (with gw): a:100, b:90, c:80         → now order  a(1) b(2) c(3)
+  // a climbed 3→1 (delta +2), b 1→2 (-1), c 2→3 (-1)
+  const ranked = rankStandings([lr("a", 100, 40), lr("b", 90, 5), lr("c", 80, 0)]);
+  const byUser = Object.fromEntries(ranked.map((r) => [r.userId, r.delta]));
+  assert.equal(byUser.a, 2); // up 2
+  assert.equal(byUser.b, -1); // down 1
+  assert.equal(byUser.c, -1); // down 1
+});
+
+test("rankStandings: no points yet → everyone rank-tied with delta 0", () => {
+  const ranked = rankStandings([lr("a", 0, 0), lr("b", 0, 0)]);
+  assert.ok(ranked.every((r) => r.rank === 1 && r.delta === 0));
 });

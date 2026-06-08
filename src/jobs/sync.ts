@@ -261,7 +261,8 @@ export async function fullSync() {
 }
 
 // CLI entrypoint: `npm run sync -- [teams|fixtures|players|gameweeks|standings]`
-if (process.argv[1]?.endsWith("sync.ts") || process.argv[1]?.endsWith("sync.js")) {
+// Run the CLI only when this file is the entrypoint (exact basename match).
+if (/(^|\/)sync\.(ts|js)$/.test(process.argv[1] ?? "")) {
   const which = process.argv[2];
   const run =
     which === "teams" ? syncTeams

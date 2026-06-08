@@ -52,6 +52,58 @@ export function sortLeagueStandings(rows: LeagueStandingRow[]): LeagueStandingRo
   });
 }
 
+export interface RankedStandingRow extends LeagueStandingRow {
+  rank: number; // 1-based; ties share the same rank (standard competition ranking)
+  /** Places moved since before this gameweek: + up, − down, 0 same. */
+  delta: number;
+}
+
+/**
+ * Rank league standings and compute each member's movement vs BEFORE this
+ * gameweek. "Before" = standings on (totalPoints − gwPoints), so the delta shows
+ * who climbed/fell this round. Pure — no DB. Ties share a rank (1,1,3…).
+ */
+export function rankStandings(rows: LeagueStandingRow[]): RankedStandingRow[] {
+  const ranksFor = (
+    list: LeagueStandingRow[],
+    score: (r: LeagueStandingRow) => { total: number; gw: number },
+  ): Map<string, number> => {
+    const sorted = [...list].sort((a, b) => {
+      const sa = score(a), sb = score(b);
+      if (sb.total !== sa.total) return sb.total - sa.total;
+      return sb.gw - sa.gw;
+    });
+    const map = new Map<string, number>();
+    let lastTotal: number | null = null;
+    let lastGw: number | null = null;
+    let lastRank = 0;
+    sorted.forEach((r, i) => {
+      const s = score(r);
+      // Standard competition ranking: equal score → same rank as the one above.
+      if (s.total === lastTotal && s.gw === lastGw) {
+        map.set(r.userId, lastRank);
+      } else {
+        lastRank = i + 1;
+        lastTotal = s.total;
+        lastGw = s.gw;
+        map.set(r.userId, lastRank);
+      }
+    });
+    return map;
+  };
+
+  // Current rank: by total points (GW tiebreak).
+  const current = ranksFor(rows, (r) => ({ total: r.totalPoints, gw: r.gwPoints }));
+  // Previous rank: strip this gameweek's points (and its tiebreak contribution).
+  const previous = ranksFor(rows, (r) => ({ total: r.totalPoints - r.gwPoints, gw: 0 }));
+
+  return sortLeagueStandings(rows).map((r) => {
+    const rank = current.get(r.userId)!;
+    const prevRank = previous.get(r.userId)!;
+    return { ...r, rank, delta: prevRank - rank }; // + = climbed
+  });
+}
+
 // ── Group clustering ─────────────────────────────────────────────────────────
 // Derives which teams share a group from group-stage fixture pairings (who plays
 // whom). Uses union-find so we never need to store group labels in the DB.

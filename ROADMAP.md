@@ -32,35 +32,27 @@ task. Each task has: files, what "done" looks like, and the tests to add.
 
 Without these, every points total shows **0**. This is the highest-value work.
 
-### 1.1 — Settle bets after matches
-**Why:** bets are placed but never resolved — they sit `OPEN` forever.
-**Files:** `src/jobs/settle.ts` (extend), `src/lib/betting.ts`
-**Models:** `Bet`, `PlayerMatchStat`, `FixtureOdds`
-- [ ] After a fixture finishes, resolve each `Bet` on it: WON/LOST/VOID.
-- [ ] Match markets: compare `Bet.selection` (HOME/DRAW/AWAY, OVER_2.5, BTTS_YES…)
-      to the final score. Player props (`scorer:<id>`): WON if that player has a
-      goal in `PlayerMatchStat`.
-- [ ] Set `payout` using `payout(stake, multiplier, status)` (already in betting.ts).
-- [ ] Idempotent — re-running settle doesn't double-pay.
-- **Tests (+4):** `settleBet` resolution for each market type (correct/incorrect),
-      void handling, scorer win from match stats.
+### 1.1 — Settle bets after matches  ✅ DONE
+**Done:** `settleBetSelection()` (pure, in betting.ts) resolves HOME/DRAW/AWAY,
+OVER/UNDER 2.5, BTTS, and `scorer:<id>` to WON/LOST/VOID. `settleFixtureBets()`
+(settle.ts) builds the result + scorer set from our DB and writes status+payout;
+runs automatically inside `settleFixture`, or standalone via `npm run settle -- bets`.
+Idempotent (only touches OPEN bets). 6 unit tests + a verified live simulation.
 
-### 1.2 — Wire real GW + total points into the dashboard
-**Why:** `team/page.tsx` hardcodes `gwPoints = {}` and `Total Points = 0`.
-**Files:** `src/app/(app)/team/page.tsx`, `src/lib/squad-data.ts` (helper)
-**Models:** `Squad`, `SquadPlayer`, `PlayerMatchStat`
-- [ ] Compute each starting player's GW points from `PlayerMatchStat.fantasyPoints`
-      for the current gameweek's fixtures (captain ×2 — use `scoreSquadGameweek`).
-- [ ] Show real "This Round" + "Total Points" (sum across gameweeks).
-- [ ] Pitch tokens show real points (the `gwPoints` map).
-- **Tests (+2):** GW total with captain doubling; total across multiple gameweeks
-      (extend `scoring.test.ts` or a new `squad-points.test.ts`).
+### 1.2 — Wire real GW + total points into the dashboard  ✅ DONE
+**Done:** new `src/lib/squad-points.ts` — `getGameweekPlayerPoints()` sums each
+player's settled `fantasyPoints` for a gameweek; `squadGameweekTotal()` scores the
+starting XI with captain ×2; `getUserSeasonTotal()` sums across all the user's
+squads. `team/page.tsx` now shows real "This Round", "Total Points", pitch + bench
+point tokens (all 0 until matches settle). 6 unit tests + verified live simulation
+(incl. captain doubling against real data).
 
-### 1.3 — Leaderboard aggregation + per-user ranks
-**Why:** league standings read points but there's no overall rank / GW movement.
-**Files:** `src/lib/leagues.ts`, `src/app/(app)/leagues/page.tsx`
-- [ ] Per-user season total + per-gameweek total, ranked. Rank movement vs last GW.
-- **Tests (+2):** ranking sort (ties → stable), GW-delta calc.
+### 1.3 — Leaderboard aggregation + per-user ranks  ✅ DONE
+**Done:** `rankStandings()` in leagues.ts assigns 1-based ranks (ties share a
+rank, standard competition ranking) and a per-member `delta` = movement vs BEFORE
+this gameweek (computed from `totalPoints − gwPoints`, no extra DB). Wired into
+`leagues/page.tsx`; `LeaguesClient` shows the real rank + a ▲/▼ movement arrow.
+4 unit tests (ranks, ties, delta direction, all-zero).
 
 ---
 

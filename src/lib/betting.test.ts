@@ -9,8 +9,10 @@ import {
   canPlaceBet,
   matchMarkets,
   scorerMultiplier,
+  settleBetSelection,
   STARTING_BALANCE,
   type BetLike,
+  type MatchResult,
 } from "./betting.js";
 
 test("payout: won → round(stake × multiplier)", () => {
@@ -109,4 +111,51 @@ test("scorerMultiplier: clamped to [1.6, 8.0] and 2dp", () => {
   const lo = scorerMultiplier("FWD", 150); // £15m striker → should hit ~floor
   assert.ok(hi <= 8.0 && lo >= 1.6);
   assert.equal(Math.round(hi * 100) / 100, hi); // already 2dp
+});
+
+// ───────────────────── bet settlement (post-match) ─────────────────────
+
+const res = (h: number, a: number, scorers: string[] = []): MatchResult => ({
+  homeScore: h,
+  awayScore: a,
+  scorerIds: new Set(scorers),
+});
+
+test("settle MATCH_RESULT: home win / away win / draw", () => {
+  assert.equal(settleBetSelection("HOME", res(2, 1)), "WON");
+  assert.equal(settleBetSelection("HOME", res(1, 1)), "LOST");
+  assert.equal(settleBetSelection("AWAY", res(0, 3)), "WON");
+  assert.equal(settleBetSelection("AWAY", res(2, 2)), "LOST");
+  assert.equal(settleBetSelection("DRAW", res(1, 1)), "WON");
+  assert.equal(settleBetSelection("DRAW", res(2, 1)), "LOST");
+});
+
+test("settle OVER/UNDER 2.5 by total goals", () => {
+  assert.equal(settleBetSelection("OVER_2.5", res(2, 1)), "WON"); // 3 > 2.5
+  assert.equal(settleBetSelection("OVER_2.5", res(1, 1)), "LOST"); // 2 < 2.5
+  assert.equal(settleBetSelection("UNDER_2.5", res(1, 1)), "WON");
+  assert.equal(settleBetSelection("UNDER_2.5", res(3, 0)), "LOST");
+});
+
+test("settle BTTS: both teams to score", () => {
+  assert.equal(settleBetSelection("BTTS_YES", res(1, 1)), "WON");
+  assert.equal(settleBetSelection("BTTS_YES", res(2, 0)), "LOST");
+  assert.equal(settleBetSelection("BTTS_NO", res(3, 0)), "WON");
+  assert.equal(settleBetSelection("BTTS_NO", res(1, 2)), "LOST");
+});
+
+test("settle scorer prop: WON if player scored, else LOST", () => {
+  const r = res(2, 1, ["p1", "p7"]);
+  assert.equal(settleBetSelection("scorer:p1", r), "WON");
+  assert.equal(settleBetSelection("scorer:p9", r), "LOST");
+});
+
+test("settle unknown selection → VOID (refund, never wrongly lose)", () => {
+  assert.equal(settleBetSelection("CORRECT_SCORE_2_1", res(2, 1)), "VOID");
+});
+
+test("settlement integrates with payout: won scorer pays stake×mult", () => {
+  const status = settleBetSelection("scorer:p1", res(1, 0, ["p1"]));
+  assert.equal(status, "WON");
+  assert.equal(payout(100, 1.8, status), 180);
 });

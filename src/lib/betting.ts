@@ -175,3 +175,57 @@ export function matchMarkets(
     },
   ];
 }
+
+// ───────────────────────── Settlement (post-match) ─────────────────────────
+//
+// Pure resolution of a bet's selection against the final match facts. The job
+// (src/jobs/settle.ts) gathers these facts from our DB and calls this; keeping
+// it pure means every market's win/lose rule is unit-tested with no DB.
+
+/** The facts a finished fixture provides, enough to settle every market. */
+export interface MatchResult {
+  homeScore: number;
+  awayScore: number;
+  /** Player ids (Player.id) who scored at least one goal in the match. */
+  scorerIds: Set<string>;
+}
+
+/**
+ * Resolve one bet selection to a settled status.
+ *   - Match/OU/BTTS: decided by the score.
+ *   - "scorer:<playerId>": WON if that player is in scorerIds.
+ * Returns VOID for selections we can't interpret (refunds the stake — safer than
+ * wrongly losing a user's points).
+ */
+export function settleBetSelection(selection: string, r: MatchResult): BetStatus {
+  // Player-prop: anytime goalscorer.
+  if (selection.startsWith("scorer:")) {
+    const playerId = selection.slice("scorer:".length);
+    return r.scorerIds.has(playerId) ? "WON" : "LOST";
+  }
+
+  const totalGoals = r.homeScore + r.awayScore;
+  const bothScored = r.homeScore > 0 && r.awayScore > 0;
+  const homeWin = r.homeScore > r.awayScore;
+  const awayWin = r.awayScore > r.homeScore;
+  const draw = r.homeScore === r.awayScore;
+
+  switch (selection) {
+    case "HOME":
+      return homeWin ? "WON" : "LOST";
+    case "AWAY":
+      return awayWin ? "WON" : "LOST";
+    case "DRAW":
+      return draw ? "WON" : "LOST";
+    case "OVER_2.5":
+      return totalGoals > 2.5 ? "WON" : "LOST";
+    case "UNDER_2.5":
+      return totalGoals < 2.5 ? "WON" : "LOST";
+    case "BTTS_YES":
+      return bothScored ? "WON" : "LOST";
+    case "BTTS_NO":
+      return bothScored ? "LOST" : "WON";
+    default:
+      return "VOID"; // unknown market → refund the stake
+  }
+}
