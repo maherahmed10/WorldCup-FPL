@@ -12,9 +12,11 @@ import {
 } from "@/lib/players";
 import { FilterBar } from "@/components/FilterBar";
 import { PlayerRow } from "@/components/PlayerRow";
+import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 
 export function PlayersClient({ players }: { players: PlayerView[] }) {
   const [filter, setFilter] = useState<PlayerFilter>(DEFAULT_FILTER);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const countries = useMemo(
     () => Array.from(new Set(players.map((p) => p.country))).sort((a, b) => a.localeCompare(b)),
@@ -50,13 +52,31 @@ export function PlayersClient({ players }: { players: PlayerView[] }) {
         <>
           <div className="mt-4 flex flex-col gap-1.5">
             {list.map((p) => (
-              <PlayerRow key={p.id} p={p} variant="market" />
+              <div
+                key={p.id}
+                className="mrow clickable"
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedId(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedId(p.id);
+                  }
+                }}
+              >
+                <PlayerRow p={p} variant="market" />
+              </div>
             ))}
           </div>
           <p className="mt-4 text-center text-xs" style={{ color: "var(--text-3)" }}>
             Showing {list.length} of {players.length}
           </p>
         </>
+      )}
+
+      {selectedId && (
+        <PlayerProfileModal playerId={selectedId} onClose={() => setSelectedId(null)} />
       )}
     </div>
   );

@@ -10,6 +10,9 @@
 const BASE = "https://v3.football.api-sports.io";
 export const WORLD_CUP_LEAGUE = 1;
 export const SEASON = 2026;
+// Player profile/season-stat source: season=2026 only has sparse internationals,
+// so we read the most recent FULL club season for realistic apps/goals/rating.
+export const PROFILE_SEASON = 2025;
 
 function key(): string {
   const k = process.env.APISPORTS_KEY;
@@ -151,11 +154,19 @@ export const apiFootball = {
   squad: (teamId: number) => get<ApiSquad>(`/players/squads?team=${teamId}`),
 
   // Rich player profiles + season stats for one team (paginated, 20/page).
-  // ~2 pages per 26-man squad → ~96 requests for all 48 teams.
-  playerProfiles: (teamId: number, page = 1) =>
+  // NOTE: querying by national-team id only returns players whose season record
+  // is WITH that nation — club stats live under the player's CLUB id. So for real
+  // club numbers we query per-player by id (playerProfileById) instead.
+  playerProfiles: (teamId: number, page = 1, season: number = PROFILE_SEASON) =>
     get<ApiPlayerProfile>(
-      `/players?team=${teamId}&season=${SEASON}&page=${page}`,
+      `/players?team=${teamId}&season=${season}&page=${page}`,
     ),
+
+  // One player's full profile + per-competition season stats — /players?id=X.
+  // Returns ALL competitions the player featured in that season (league + cups +
+  // continental), which the sync aggregates. 1 request per player.
+  playerProfileById: (playerId: number, season: number = PROFILE_SEASON) =>
+    get<ApiPlayerProfile>(`/players?id=${playerId}&season=${season}`),
 
   standings: () =>
     get<ApiStanding>(`/standings?league=${WORLD_CUP_LEAGUE}&season=${SEASON}`),

@@ -164,49 +164,83 @@ function parseUnit(v: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// ── Player profiles: bio + season stats from /players?team=X (for the player
-// detail UI). ~2 pages per team → ~96 requests for all 48. Players must be
-// synced first (matches on apiPlayerId). Season stats are 0/null pre-tournament
-// and accumulate as matches are played — re-run periodically to refresh.
-export async function syncPlayerProfiles() {
-  const teams = await db.team.findMany();
-  const knownApiIds = new Set((await db.player.findMany({ select: { apiPlayerId: true } })).map((p) => p.apiPlayerId));
-  let updated = 0;
-  for (const team of teams) {
-    for (let page = 1; page <= 3; page++) {
-      let profiles;
-      try {
-        profiles = await apiFootball.playerProfiles(team.apiTeamId, page);
-      } catch (e) {
-        console.error(`  ✗ profiles ${team.name} p${page}:`, (e as Error).message);
-        break;
-      }
-      if (profiles.length === 0) break; // no more pages
-      for (const entry of profiles) {
-        if (!knownApiIds.has(entry.player.id)) continue; // not in our pool
-        // Pick the World Cup stats block if present, else the first.
-        const st = entry.statistics?.[0];
-        await db.player.updateMany({
-          where: { apiPlayerId: entry.player.id },
-          data: {
-            age: entry.player.age,
-            nationality: entry.player.nationality,
-            heightCm: parseUnit(entry.player.height),
-            weightKg: parseUnit(entry.player.weight),
-            injured: entry.player.injured ?? false,
-            seasonAppearances: st?.games.appearences ?? null,
-            seasonMinutes: st?.games.minutes ?? null,
-            seasonGoals: st?.goals.total ?? null,
-            seasonAssists: st?.goals.assists ?? null,
-            seasonRating: st?.games.rating ? Number(st.games.rating) : null,
-          },
-        });
-        updated++;
-      }
-      if (profiles.length < 20) break; // last page
+// Aggregate a player's season stats ACROSS all competitions (league + cups +
+// continental) into one line. season=2026 only has sparse internationals, so we
+// read the most recent full club season — but the API splits it into one block
+// per competition (La Liga, UCL, …). Sum the counters; minutes-weight the rating.
+type StatBlock = {
+  games: { appearences: number | null; minutes: number | null; rating: string | null };
+  goals: { total: number | null; assists: number | null };
+};
+function aggregateStats(blocks: StatBlock[] | undefined) {
+  let apps = 0, minutes = 0, goals = 0, assists = 0;
+  let ratingWeighted = 0, ratingMinutes = 0;
+  for (const b of blocks ?? []) {
+    apps += b.games.appearences ?? 0;
+    const mins = b.games.minutes ?? 0;
+    minutes += mins;
+    goals += b.goals.total ?? 0;
+    assists += b.goals.assists ?? 0;
+    const r = b.games.rating ? Number(b.games.rating) : null;
+    if (r && mins > 0) {
+      ratingWeighted += r * mins;
+      ratingMinutes += mins;
     }
   }
-  console.log(`✓ player profiles: ${updated} players enriched (bio + season stats)`);
+  const hasAny = (blocks?.length ?? 0) > 0;
+  return {
+    apps: hasAny ? apps : null,
+    minutes: hasAny ? minutes : null,
+    goals: hasAny ? goals : null,
+    assists: hasAny ? assists : null,
+    rating: ratingMinutes > 0 ? Math.round((ratingWeighted / ratingMinutes) * 100) / 100 : null,
+  };
+}
+
+// ── Player profiles: bio + aggregated CLUB-season stats, queried PER PLAYER by
+// id (/players?id=X&season=2025). Club stats live under the player's club id, so
+// a national-team query misses them — we query each player individually and sum
+// across all their competitions. ~1 request/player → ~1,248 for the full pool.
+// One-time / occasional; safe to re-run. Optionally pass a price floor to only
+// enrich notable players (npm run sync -- profiles 100  → price >= 100 = £10m).
+export async function syncPlayerProfiles(minPriceTenths = 0) {
+  const players = await db.player.findMany({
+    where: minPriceTenths > 0 ? { price: { gte: minPriceTenths } } : undefined,
+    select: { id: true, apiPlayerId: true },
+  });
+  let updated = 0;
+  let i = 0;
+  for (const p of players) {
+    i++;
+    let resp;
+    try {
+      resp = await apiFootball.playerProfileById(p.apiPlayerId);
+    } catch (e) {
+      console.error(`  ✗ profile ${p.apiPlayerId}:`, (e as Error).message);
+      continue;
+    }
+    const entry = resp[0];
+    if (!entry) continue; // no record this season
+    const s = aggregateStats(entry.statistics);
+    await db.player.update({
+      where: { id: p.id },
+      data: {
+        age: entry.player.age,
+        nationality: entry.player.nationality,
+        heightCm: parseUnit(entry.player.height),
+        weightKg: parseUnit(entry.player.weight),
+        injured: entry.player.injured ?? false,
+        seasonAppearances: s.apps,
+        seasonMinutes: s.minutes,
+        seasonGoals: s.goals,
+        seasonAssists: s.assists,
+        seasonRating: s.rating,
+      },
+    });
+    updated++;
+    if (i % 100 === 0) console.log(`  …${i}/${players.length}`);
+  }
+  console.log(`✓ player profiles: ${updated}/${players.length} enriched (aggregated club-season stats)`);
 }
 
 // ── Standings: populate Team.group ("Group A" … "Group L") from /standings. ──
@@ -316,11 +350,13 @@ export async function fullSync() {
 // Run the CLI only when this file is the entrypoint (exact basename match).
 if (/(^|\/)sync\.(ts|js)$/.test(process.argv[1] ?? "")) {
   const which = process.argv[2];
+  // `npm run sync -- profiles [minPriceTenths]` → only enrich players ≥ that price.
+  const profilesArg = () => syncPlayerProfiles(Number(process.argv[3]) || 0);
   const run =
     which === "teams" ? syncTeams
     : which === "fixtures" ? syncFixtures
     : which === "players" ? syncPlayers
-    : which === "profiles" ? syncPlayerProfiles
+    : which === "profiles" ? profilesArg
     : which === "gameweeks" ? syncGameweeks
     : which === "standings" ? syncStandings
     : which === "odds" ? syncOdds
