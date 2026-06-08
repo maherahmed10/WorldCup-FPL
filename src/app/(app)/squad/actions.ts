@@ -17,6 +17,7 @@ export interface SavePayload {
   starterIds: string[]; // 11 starting player ids
   benchIds: string[]; // 4 bench player ids
   captainId: string | null;
+  viceId: string | null;
 }
 
 export async function saveSquad(payload: SavePayload) {
@@ -66,11 +67,15 @@ export async function saveSquad(payload: SavePayload) {
   if (!formationName(starterRules)) {
     return { ok: false, error: "Your starting 11 isn't an allowed formation." };
   }
-  if (payload.captainId && !allIds.includes(payload.captainId)) {
-    return { ok: false, error: "Captain must be in the squad." };
-  }
-
+  // Captain + vice are REQUIRED, must be in the starting XI, and must differ.
+  const { captainId, viceId } = payload;
   const starters = new Set(payload.starterIds);
+  if (!captainId || !viceId) {
+    return { ok: false, error: "Pick a captain and a vice-captain before saving." };
+  }
+  if (!starters.has(captainId)) return { ok: false, error: "Captain must be in your starting 11." };
+  if (!starters.has(viceId)) return { ok: false, error: "Vice-captain must be in your starting 11." };
+  if (captainId === viceId) return { ok: false, error: "Captain and vice-captain must be different players." };
 
   // Upsert the squad for this user+gameweek, replacing its players.
   const existing = await db.squad.findUnique({
@@ -82,7 +87,7 @@ export async function saveSquad(payload: SavePayload) {
     await db.squad.update({
       where: { id: existing.id },
       data: {
-        captainId: payload.captainId,
+        captainId, // keep the initial captain on the squad too
         players: {
           create: allIds.map((id) => ({ playerId: id, isStarting: starters.has(id) })),
         },
@@ -93,13 +98,20 @@ export async function saveSquad(payload: SavePayload) {
       data: {
         userId: user.id,
         gameweekId: gameweek.id,
-        captainId: payload.captainId,
+        captainId,
         players: {
           create: allIds.map((id) => ({ playerId: id, isStarting: starters.has(id) })),
         },
       },
     });
   }
+
+  // The per-gameweek captain + vice (this is what settlement reads).
+  await db.gameweekPick.upsert({
+    where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
+    update: { captainId, viceId },
+    create: { userId: user.id, gameweekId: gameweek.id, captainId, viceId },
+  });
 
   revalidatePath("/team");
   return { ok: true };

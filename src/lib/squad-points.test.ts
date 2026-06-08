@@ -42,3 +42,35 @@ test("negative player points (cards/own goals) reduce the total", () => {
   const points = { a: 6, b: -2 };
   assert.equal(squadGameweekTotal(players, null, points), 4);
 });
+
+// ── vice auto-sub (captain played 0 min → vice gets ×2) ──
+
+test("captain played → captain doubled, vice normal", () => {
+  const players = [p("cap", true), p("vice", true), p("x", true)];
+  const points = { cap: 6, vice: 4, x: 2 };
+  const minutes = { cap: 90, vice: 90, x: 90 };
+  // cap×2 (12) + vice (4) + x (2) = 18
+  assert.equal(squadGameweekTotal(players, "cap", points, "vice", minutes), 18);
+});
+
+test("captain played 0 min → vice gets the ×2 instead", () => {
+  const players = [p("cap", true), p("vice", true), p("x", true)];
+  const points = { cap: 0, vice: 4, x: 2 };
+  const minutes = { cap: 0, vice: 90, x: 90 }; // captain DNP
+  // cap (0) + vice×2 (8) + x (2) = 10
+  assert.equal(squadGameweekTotal(players, "cap", points, "vice", minutes), 10);
+});
+
+test("neither captain nor vice played → no doubling (×2 of 0)", () => {
+  const players = [p("cap", true), p("vice", true), p("x", true)];
+  const points = { cap: 0, vice: 0, x: 5 };
+  const minutes = { cap: 0, vice: 0, x: 90 };
+  assert.equal(squadGameweekTotal(players, "cap", points, "vice", minutes), 5);
+});
+
+test("no vice given → falls back to captain doubling", () => {
+  const players = [p("cap", true), p("x", true)];
+  const points = { cap: 7, x: 3 };
+  // no minutes/vice passed → captain doubled: 14 + 3 = 17
+  assert.equal(squadGameweekTotal(players, "cap", points), 17);
+});

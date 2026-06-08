@@ -42,6 +42,13 @@ export default async function SquadPage() {
 
   const existing = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
   const budgetBonus = appUser?.squadBudgetBonus ?? 0;
+  // The per-gameweek captain/vice pick (separate from Squad.captainId).
+  const pick = gameweek
+    ? await db.gameweekPick.findUnique({
+        where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
+        select: { captainId: true, viceId: true },
+      })
+    : null;
 
   return (
     <>
@@ -56,7 +63,8 @@ export default async function SquadPage() {
         gameweekLabel={gameweek?.label ?? ""}
         initialStarterIds={existing?.players.filter((p) => p.isStarting).map((p) => p.id) ?? []}
         initialBenchIds={existing?.players.filter((p) => !p.isStarting).map((p) => p.id) ?? []}
-        initialCaptainId={existing?.captainId ?? null}
+        initialCaptainId={pick?.captainId ?? existing?.captainId ?? null}
+        initialViceId={pick?.viceId ?? null}
         maxPerCountry={maxPerCountry}
         balance={appUser?.bettingBalance ?? 1000}
         budgetBonus={budgetBonus}

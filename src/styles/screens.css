@@ -101,13 +101,23 @@
 .price-sel input[type=range]{ accent-color:var(--accent); width:90px; }
 
 /* ============ PLAYER ROW ============ */
+/* Row = wrapper holding two hit-zones: identity (opens profile) + add button. */
 .prow {
-  display:flex; align-items:center; gap:11px; width:100%; text-align:left;
-  background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:9px 12px; transition:background .14s, border .14s;
+  display:flex; align-items:center; gap:8px; width:100%;
+  background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:5px 8px 5px 4px;
+  transition:background .14s, border .14s;
 }
-.prow:hover:not(.disabled) { background:var(--surface-3); border-color:var(--line-2); }
+.prow:hover { background:var(--surface-3); border-color:var(--line-2); }
 .prow.picked { border-color:rgba(24,224,138,.4); background:rgba(24,224,138,.06); }
-.prow.disabled { opacity:.5; cursor:not-allowed; }
+/* identity zone — tap to view the profile; never disabled */
+.prow-id-btn {
+  flex:1; min-width:0; display:flex; align-items:center; gap:11px; text-align:left;
+  background:none; border:none; padding:6px 4px 6px 8px; border-radius:9px; cursor:pointer;
+  transition:background .12s;
+}
+.prow-id-btn:hover { background:rgba(255,255,255,.04); }
+.prow-id-btn:hover .prow-hint { opacity:.75; transform:translateX(0); }
+.prow-hint { flex:0 0 auto; color:var(--text-3); opacity:0; transform:translateX(-3px); transition:opacity .15s, transform .15s; }
 .prow-flag { flex:0 0 auto; }
 .prow-id { flex:1; min-width:0; }
 .prow-name { font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
@@ -117,8 +127,12 @@
 .prow-pts { font-size:16px; font-weight:800; }
 .prow-sub { font-size:10px; color:var(--text-3); font-weight:600; }
 .prow-price { font-size:15px; font-weight:800; min-width:50px; text-align:right; color:var(--text); }
-.prow-action { flex:0 0 auto; width:30px; display:flex; justify-content:flex-end; }
-.add-btn { width:28px; height:28px; border-radius:50%; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; }
+/* action zone — add to squad */
+.prow-action { flex:0 0 auto; width:40px; min-height:40px; display:flex; align-items:center; justify-content:center; background:none; border:none; cursor:pointer; }
+.prow-action.disabled { cursor:not-allowed; }
+.add-btn { width:30px; height:30px; border-radius:50%; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; transition:transform .12s, background .12s; }
+.prow-action:hover:not(.disabled) .add-btn { background:#2BE998; transform:scale(1.06); }
+.prow-action:active:not(.disabled) .add-btn { transform:translateY(1px); }
 .dot-doubt, .dot-out { width:7px; height:7px; border-radius:50%; display:inline-block; }
 .dot-doubt { background:var(--gold); } .dot-out { background:var(--live); }
 

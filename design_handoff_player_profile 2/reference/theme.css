@@ -1,0 +1,161 @@
+/* ============================================================
+   GAFFER — World Cup 2026 Fantasy
+   Theme tokens + base styles. Premium dark "stadium at night".
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* surfaces */
+  --bg:        #080B11;
+  --bg-grad-1: #0B1019;
+  --bg-grad-2: #080A0F;
+  --surface:   #121925;
+  --surface-2: #19212F;
+  --surface-3: #222C3D;
+  --surface-hi:#2A3649;
+
+  /* lines */
+  --line:   rgba(255,255,255,0.07);
+  --line-2: rgba(255,255,255,0.12);
+  --line-3: rgba(255,255,255,0.20);
+
+  /* text */
+  --text:   #EEF2F8;
+  --text-2: #97A4B6;
+  --text-3: #5E6B7E;
+
+  /* accents */
+  --accent:      #18E08A;   /* electric pitch green - primary */
+  --accent-2:    #0FC676;
+  --accent-deep: #0A8F55;
+  --accent-ink:  #042417;   /* text on accent */
+  --accent-glow: rgba(24,224,138,0.30);
+
+  --live:  #FF4D5E;         /* live / lost / over-budget */
+  --live-2:#E23D4D;
+  --gold:  #FFC53D;         /* captain / premium / won */
+  --gold-2:#F2B01E;
+  --blue:  #3DA5FF;         /* links / info / toggles */
+  --blue-deep:#1E6FD6;
+  --purple:#9D7BFF;
+
+  /* pitch */
+  --pitch-1: #167A47;
+  --pitch-2: #0F6238;
+  --pitch-line: rgba(255,255,255,0.22);
+
+  /* radii */
+  --r-sm: 8px;
+  --r:    12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* shadow */
+  --sh-1: 0 1px 2px rgba(0,0,0,0.4);
+  --sh-2: 0 4px 16px rgba(0,0,0,0.35);
+  --sh-3: 0 12px 40px rgba(0,0,0,0.55);
+  --sh-accent: 0 6px 22px rgba(24,224,138,0.28);
+
+  --font: "Hanken Grotesk", system-ui, sans-serif;
+  --display: "Archivo", system-ui, sans-serif;
+
+  --maxw: 1180px;
+  --sidebar: 248px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root { min-height: 100vh; }
+
+h1,h2,h3,h4 { font-family: var(--display); margin: 0; letter-spacing: -0.02em; }
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input { font-family: inherit; }
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--surface-hi); }
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-weight: 700; font-size: 14px; letter-spacing: 0.01em;
+  padding: 11px 18px; border-radius: var(--r-pill);
+  transition: transform .12s ease, background .15s ease, box-shadow .15s ease, opacity .15s ease;
+  white-space: nowrap; user-select: none;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: var(--sh-accent); }
+.btn-primary:hover { background: #2BE998; }
+.btn-primary:disabled { background: var(--surface-3); color: var(--text-3); box-shadow: none; cursor: not-allowed; }
+.btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); }
+.btn-ghost:hover { background: var(--surface-3); }
+.btn-live { background: var(--live); color: #fff; }
+.btn-sm { padding: 8px 14px; font-size: 13px; }
+.btn-block { width: 100%; }
+
+/* ---- chips / pills ---- */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line);
+}
+.pill-accent { background: rgba(24,224,138,0.14); color: var(--accent); border-color: rgba(24,224,138,0.28); }
+.pill-live   { background: rgba(255,77,94,0.16); color: #ff8b96; border-color: rgba(255,77,94,0.32); }
+.pill-gold   { background: rgba(255,197,61,0.16); color: var(--gold); border-color: rgba(255,197,61,0.32); }
+.pill-blue   { background: rgba(61,165,255,0.14); color: var(--blue); border-color: rgba(61,165,255,0.30); }
+
+/* ---- cards ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.card-2 { background: var(--surface-2); }
+
+/* position chips */
+.pos { font-weight: 800; font-size: 11px; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 6px; }
+.pos-GK { background: rgba(255,197,61,0.18); color: var(--gold); }
+.pos-DEF{ background: rgba(61,165,255,0.18); color: var(--blue); }
+.pos-MID{ background: rgba(24,224,138,0.18); color: var(--accent); }
+.pos-FWD{ background: rgba(157,123,255,0.20); color: var(--purple); }
+
+/* utility */
+.row { display: flex; align-items: center; }
+.muted { color: var(--text-2); }
+.dim { color: var(--text-3); }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+/* skeleton shimmer */
+@keyframes shimmer { 0% { background-position: -480px 0; } 100% { background-position: 480px 0; } }
+.skel {
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+  background-size: 960px 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+
+@keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: livePulse 1.2s ease-in-out infinite; }
+
+@keyframes popIn { from { transform: translateY(10px) scale(.985); } to { transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(14px); } to { transform: translateY(0); } }

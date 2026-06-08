@@ -83,6 +83,7 @@ model User {
   h2hCreated      H2HChallenge[] @relation("H2HCreator")
   h2hReceived     H2HChallenge[] @relation("H2HOpponent")
   h2hWon          H2HChallenge[] @relation("H2HWinner")
+  gameweekPicks   GameweekPick[]
 }
 
 model League {
@@ -173,6 +174,7 @@ model Gameweek {
   fixtures Fixture[]
   squads   Squad[]
   bets     Bet[]
+  picks    GameweekPick[]
 
   @@index([startsAt])
 }
@@ -277,6 +279,24 @@ model SquadPlayer {
   player Player @relation(fields: [playerId], references: [id])
 
   @@unique([squadId, playerId])
+}
+
+// GameweekPick — the captain + vice a user picks FOR a specific gameweek (FPL:
+// captaincy changes every week, even while the squad is locked). Settlement
+// reads this per gameweek: captain scores ×2, or the vice does if the captain
+// played 0 minutes. Editable until Gameweek.deadline (first kickoff of the GW).
+model GameweekPick {
+  id         String @id @default(cuid())
+  userId     String @db.Uuid
+  gameweekId String
+  captainId  String // Player.id — scores ×2
+  viceId     String // Player.id — scores ×2 if the captain doesn't play
+
+  user     User     @relation(fields: [userId], references: [id])
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id])
+
+  @@unique([userId, gameweekId])
+  @@index([userId])
 }
 
 // Bet — points-only prediction. payout = stake * multiplier if WON.
