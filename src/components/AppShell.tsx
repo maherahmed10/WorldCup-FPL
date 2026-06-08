@@ -15,8 +15,8 @@ const NAV = [
   { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures" },
 ];
 
-// Routes under the "team" tab group (dashboard, squad picker, transfers).
-const TEAM_ROUTES = ["/team", "/squad", "/transfers"];
+// Routes under the "team" tab group (dashboard, squad picker, transfers, store).
+const TEAM_ROUTES = ["/team", "/squad", "/transfers", "/store"];
 
 function activeTab(pathname: string): string {
   if (TEAM_ROUTES.some((r) => pathname.startsWith(r))) return "team";
@@ -65,13 +65,13 @@ export function AppShell({
           ))}
         </nav>
         <div className="side-foot">
-          <Link href="/squad" className="nav-item">
+          <Link href="/squad" className={"nav-item" + (pathname.startsWith("/squad") ? " on" : "")}>
             <span className="nav-ico">
               <Icon name="plus" size={20} />
             </span>
             Pick / Edit Team
           </Link>
-          <Link href="/transfers" className="nav-item">
+          <Link href="/transfers" className={"nav-item" + (pathname.startsWith("/transfers") ? " on" : "")}>
             <span className="nav-ico">
               <Icon name="swap" size={20} />
             </span>

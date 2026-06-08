@@ -13,8 +13,15 @@ import {
   getActiveSquad,
   toPitchRows,
 } from "@/lib/squad-data";
+import {
+  getGameweekPlayerPoints,
+  squadGameweekTotal,
+  getUserSeasonTotal,
+} from "@/lib/squad-points";
 import { totalPrice } from "@/lib/squad-rules";
+import type { PerkLike } from "@/lib/store";
 import { TeamNamePrompt } from "./TeamNamePrompt";
+import { MiniStore } from "@/components/MiniStore";
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -74,8 +81,21 @@ export default async function TeamPage() {
   const rows = toPitchRows(squad.players);
   const bench = squad.players.filter((p) => !p.isStarting);
 
-  // GW points come from settled PlayerMatchStat; none yet pre-tournament → 0s.
-  const gwPoints: Record<string, number> = {};
+  // Real points from settled PlayerMatchStat (0 until matches are played + settled).
+  const gwPoints = await getGameweekPlayerPoints(
+    squad.players.map((p) => p.id),
+    gameweek!.id,
+  );
+  const gwTotal = squadGameweekTotal(squad.players, squad.captainId, gwPoints);
+  const seasonTotal = await getUserSeasonTotal(user.id);
+
+  // Store data for mini store panel
+  const rawPerks = await db.userPerk.findMany({
+    where: { userId: user.id },
+    select: { storeItemId: true, gameweekId: true, usedAt: true },
+  });
+  const ownedPerks = rawPerks as PerkLike[];
+  const isGroupStage = !(gameweek?.isKnockout ?? false);
 
   return (
     <div className="screen">
@@ -91,8 +111,8 @@ export default async function TeamPage() {
       </div>
 
       <div className="grid-stats">
-        <StatCard label="Total Points" value={0} sub="Season" icon="bolt" />
-        <StatCard label="This Round" value="+0" sub={gameweek?.label ?? ""} tone="accent" icon="arrowup" />
+        <StatCard label="Total Points" value={seasonTotal} sub="Season" icon="bolt" />
+        <StatCard label="This Round" value={`+${gwTotal}`} sub={gameweek?.label ?? ""} tone="accent" icon="arrowup" />
         <StatCard label="Squad" value={`${squad.players.length}/15`} sub="Players picked" tone="gold" icon="team" />
         <StatCard label="Squad Value" value={`£${(squadValue / 10).toFixed(1)}m`} sub="At selection" tone="blue" icon="coins" />
       </div>
@@ -133,6 +153,12 @@ export default async function TeamPage() {
               ))
             )}
           </div>
+
+          <MiniStore
+            balance={appUser?.bettingBalance ?? 1000}
+            ownedPerks={ownedPerks}
+            isGroupStage={isGroupStage}
+          />
         </div>
       </div>
     </div>

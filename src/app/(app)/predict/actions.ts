@@ -1,13 +1,13 @@
 "use server";
 
-// Server action: place a points-only prediction. Validates the stake against
-// the user's live balance SERVER-SIDE (never trust the client) and writes a Bet
-// row. Settlement (post-match job) flips status OPEN → WON/LOST/VOID later.
+// Server action: place a money bet. Validates the stake against the user's
+// bettingBalance (stored on User, not derived from bets), then atomically
+// deducts the stake and creates the Bet row in one transaction.
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
-import { availableBalance, canPlaceBet, type BetLike, type MarketType } from "@/lib/betting";
+import { canPlaceBet, type MarketType } from "@/lib/betting";
 
 export interface PlaceBetInput {
   fixtureId: string;
@@ -34,28 +34,27 @@ export async function placeBet(input: PlaceBetInput): Promise<PlaceBetResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "You must be signed in to place a bet." };
 
-  // Recompute the balance from the user's own bets — the client number is advisory.
-  const existing = await db.bet.findMany({
-    where: { userId: user.id },
-    select: { stake: true, multiplier: true, status: true },
-  });
-  const balance = availableBalance(existing as BetLike[]);
-
+  const balance = user.bettingBalance;
   if (!canPlaceBet(stake, balance)) {
-    return { ok: false, error: `Stake must be 1–${balance} points.` };
+    return { ok: false, error: `Stake must be between £1 and £${balance.toLocaleString("en-GB")}.` };
   }
 
-  await db.bet.create({
-    data: {
-      userId: user.id,
-      gameweekId: fixture.gameweekId,
-      fixtureId: fixture.id,
-      marketType: input.marketType,
-      selection: input.selection,
-      stake,
-      multiplier: input.multiplier,
-      // status defaults to OPEN, payout null until settlement.
-    },
+  await db.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: { bettingBalance: { decrement: stake } },
+    });
+    await tx.bet.create({
+      data: {
+        userId: user.id,
+        gameweekId: fixture.gameweekId,
+        fixtureId: fixture.id,
+        marketType: input.marketType,
+        selection: input.selection,
+        stake,
+        multiplier: input.multiplier,
+      },
+    });
   });
 
   revalidatePath("/predict");

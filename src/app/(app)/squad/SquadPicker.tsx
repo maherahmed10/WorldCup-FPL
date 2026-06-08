@@ -13,6 +13,8 @@ import { Icon } from "@/components/Icon";
 import { Flag } from "@/components/Flag";
 import { Jersey } from "@/components/Jersey";
 import { BudgetBar } from "@/components/BudgetBar";
+import { MiniStore } from "@/components/MiniStore";
+import type { PerkLike } from "@/lib/store";
 import {
   SQUAD_QUOTA,
   XI_SIZE,
@@ -52,12 +54,20 @@ export function SquadPicker({
   initialStarterIds,
   initialBenchIds,
   initialCaptainId,
+  maxPerCountry = 3,
+  balance = 1000,
+  ownedPerks = [],
+  isGroupStage = true,
 }: {
   pool: PickerPlayer[];
   gameweekLabel: string;
   initialStarterIds: string[];
   initialBenchIds: string[];
   initialCaptainId: string | null;
+  maxPerCountry?: number;
+  balance?: number;
+  ownedPerks?: PerkLike[];
+  isGroupStage?: boolean;
 }) {
   const router = useRouter();
   const byId = useMemo(() => new Map(pool.map((p) => [p.id, p])), [pool]);
@@ -80,7 +90,7 @@ export function SquadPicker({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const validation = validateSquad(squad);
+  const validation = validateSquad(squad, { maxPerCountry });
   const byPos = countByPosition(squad);
   const countryCounts = countByCountry(squad);
   const pickedIds = useMemo(() => new Set(squad.map((p) => p.id)), [squad]);
@@ -280,7 +290,13 @@ export function SquadPicker({
             squad={squad}
             captainId={captainId}
             countryCounts={countryCounts}
+            maxPerCountry={maxPerCountry}
             onSetCaptain={setCaptainId}
+          />
+          <MiniStore
+            balance={balance}
+            ownedPerks={ownedPerks}
+            isGroupStage={isGroupStage}
           />
         </div>
       </div>
@@ -293,6 +309,7 @@ export function SquadPicker({
           countryCounts={countryCounts}
           remaining={validation.remaining}
           quotaLeft={SQUAD_QUOTA[pickerFor.pos] - byPos[pickerFor.pos]}
+          maxPerCountry={maxPerCountry}
           onPick={addPlayer}
           onClose={() => setPickerFor(null)}
         />
@@ -486,11 +503,13 @@ function SquadSummary({
   squad,
   captainId,
   countryCounts,
+  maxPerCountry,
   onSetCaptain,
 }: {
   squad: SquadEntry[];
   captainId: string | null;
   countryCounts: Record<string, number>;
+  maxPerCountry: number;
   onSetCaptain: (id: string) => void;
 }) {
   const captain = squad.find((p) => p.id === captainId) ?? null;
@@ -529,10 +548,10 @@ function SquadSummary({
       <div className="quota">
         {entries.length ? (
           entries.map(([c, n]) => (
-            <div key={c} className={"quota-item" + (n >= 3 ? " full" : "")}>
+            <div key={c} className={"quota-item" + (n >= maxPerCountry ? " full" : "")}>
               <Flag country={c} size={15} round />
               <span className="qc">{countryCode(c)}</span>
-              <span className={"qn num" + (n > 3 ? " over" : "")}>{n}/3</span>
+              <span className={"qn num" + (n > maxPerCountry ? " over" : "")}>{n}/{maxPerCountry}</span>
             </div>
           ))
         ) : (
@@ -555,6 +574,7 @@ function PickerModal({
   countryCounts,
   remaining,
   quotaLeft,
+  maxPerCountry,
   onPick,
   onClose,
 }: {
@@ -564,6 +584,7 @@ function PickerModal({
   countryCounts: Record<string, number>;
   remaining: number;
   quotaLeft: number;
+  maxPerCountry: number;
   onPick: (p: PickerPlayer) => void;
   onClose: () => void;
 }) {
@@ -653,7 +674,7 @@ function PickerModal({
             ) : (
               candidates.map((p) => {
                 const already = pickedIds.has(p.id);
-                const countryFull = !already && (countryCounts[p.country] ?? 0) >= 3;
+                const countryFull = !already && (countryCounts[p.country] ?? 0) >= maxPerCountry;
                 const tooPricey = !already && p.price > remaining;
                 const disabled = already || countryFull;
                 return (
@@ -675,7 +696,7 @@ function PickerModal({
                     <span className="prow-num">
                       <span className="prow-price num">£{(p.price / 10).toFixed(1)}</span>
                       {already && <span className="prow-sub">In squad</span>}
-                      {countryFull && <span className="prow-sub" style={{ color: "var(--live)" }}>Max 3</span>}
+                      {countryFull && <span className="prow-sub" style={{ color: "var(--live)" }}>Max {maxPerCountry}</span>}
                       {tooPricey && !disabled && <span className="prow-sub" style={{ color: "var(--gold)" }}>Over budget</span>}
                     </span>
                   </button>

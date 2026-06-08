@@ -89,18 +89,18 @@ export function PredictClient({
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-extrabold">Predictions</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
-            Stake virtual points on match markets for bonus points. No real money.
+            Stake your virtual £ bank on match markets. Win big, spend winnings in the Store.
           </p>
         </div>
         <div
           className="flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2"
           style={{ background: "var(--surface)", borderColor: "var(--line-2)" }}
         >
-          <span style={{ color: "var(--gold)" }}>◎</span>
+          <span style={{ color: "var(--accent)" }}>£</span>
           <div className="text-right">
-            <div className="num text-lg font-extrabold">{balance}</div>
+            <div className="num text-lg font-extrabold">{balance.toLocaleString("en-GB")}</div>
             <div className="text-[10px] font-semibold" style={{ color: "var(--text-3)" }}>
-              points balance
+              betting bank
             </div>
           </div>
         </div>
@@ -233,7 +233,7 @@ function BetSlip({
       });
       if (res.ok) {
         router.refresh();
-        onPlaced(`Bet placed · ${stake} pts staked`);
+        onPlaced(`Bet placed · £${stake} staked`);
       } else {
         setError(res.error);
       }
@@ -280,13 +280,13 @@ function BetSlip({
         </div>
 
         <label className="mb-1.5 block text-xs font-bold" style={{ color: "var(--text-2)" }}>
-          Stake (points)
+          Stake (£)
         </label>
         <div
           className="flex items-center gap-2 rounded-xl border px-3 py-2"
           style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}
         >
-          <span style={{ color: "var(--gold)" }}>◎</span>
+          <span className="font-bold" style={{ color: "var(--accent)" }}>£</span>
           <input
             type="number"
             value={stake}
@@ -342,7 +342,7 @@ function BetSlip({
           className="w-full rounded-xl py-3 text-sm font-extrabold transition-opacity disabled:opacity-50"
           style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
         >
-          {pending ? "Placing…" : `Confirm Bet · ${stake} pts`}
+          {pending ? "Placing…" : `Confirm Bet · £${stake}`}
         </button>
       </div>
     </div>
@@ -396,13 +396,13 @@ function BetRow({ b }: { b: BetView }) {
       </div>
       <div className="text-right">
         <div className="num text-sm font-bold">
-          {b.stake} <span style={{ color: "var(--text-3)" }}>@{b.multiplier.toFixed(2)}</span>
+          £{b.stake} <span style={{ color: "var(--text-3)" }}>@{b.multiplier.toFixed(2)}</span>
         </div>
         <div className="num text-[13px] font-bold" style={{ color: accent }}>
           {b.status === "OPEN"
             ? "Open"
             : b.status === "WON"
-              ? `+${b.payout ?? 0}`
+              ? `+£${b.payout ?? 0}`
               : b.status === "VOID"
                 ? "Void"
                 : "Lost"}

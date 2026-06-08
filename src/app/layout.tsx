@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo, Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
+import "flag-icons/css/flag-icons.min.css";
 
 // GAFFER brand fonts (from design/theme.css).
 const display = Archivo({

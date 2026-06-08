@@ -67,16 +67,18 @@ enum MarketType {
 
 // User — maps 1:1 to a Supabase Auth user (id == auth.users.id UUID).
 model User {
-  id        String   @id @db.Uuid
-  email     String   @unique
-  name      String // the person's real name (from Google / email)
-  teamName  String? // their fantasy team name — set in-app after first login
-  createdAt DateTime @default(now())
+  id             String   @id @db.Uuid
+  email          String   @unique
+  name           String
+  teamName       String?
+  bettingBalance Int      @default(1000) // virtual £ bank — deducted on bet/purchase, credited on win/void
+  createdAt      DateTime @default(now())
 
   squads          Squad[]
   bets            Bet[]
   leagueMembers   LeagueMember[]
   ownedLeagues    League[]       @relation("LeagueOwner")
+  perks           UserPerk[]
 }
 
 model League {
@@ -230,10 +232,11 @@ model PlayerMatchStat {
 // Squad — a user's 15-player team valid from a given gameweek window.
 // A new Squad row is created when a knockout transfer window opens.
 model Squad {
-  id         String @id @default(cuid())
-  userId     String @db.Uuid
-  gameweekId String // valid-from window
-  captainId  String? // Player.id scoring x2
+  id            String @id @default(cuid())
+  userId        String @db.Uuid
+  gameweekId    String // valid-from window
+  captainId     String? // Player.id scoring x2
+  transfersUsed Int    @default(0) // transfers made this window (resets with each new Squad row)
 
   user     User          @relation(fields: [userId], references: [id])
   gameweek Gameweek      @relation(fields: [gameweekId], references: [id])
@@ -274,4 +277,34 @@ model Bet {
 
   @@index([userId])
   @@index([gameweekId])
+}
+
+// StoreItem — catalogue entry (seeded, not user-created).
+model StoreItem {
+  id          String @id // stable slug, e.g. "perk_country_slot"
+  name        String
+  description String
+  cost        Int    // virtual £ price, same units as User.bettingBalance
+  effectKey   String // "country_slot" | "extra_captain" | "extra_transfer" | "bench_boost"
+
+  perks UserPerk[]
+}
+
+// UserPerk — a perk a user has purchased.
+// gameweekId = null  → permanent (country_slot stays active until used)
+// gameweekId = "gw1" → activated for that gameweek
+// usedAt = non-null  → perk has been consumed (won't apply any more)
+model UserPerk {
+  id          String    @id @default(cuid())
+  userId      String    @db.Uuid
+  storeItemId String
+  gameweekId  String?   // which GW this perk is activated for (null = permanent/unactivated)
+  usedAt      DateTime? // set when the perk effect is consumed
+
+  createdAt DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  storeItem StoreItem @relation(fields: [storeItemId], references: [id])
+
+  @@index([userId])
 }

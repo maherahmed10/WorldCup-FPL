@@ -25,8 +25,16 @@ export type MarketType =
   | "PLAYER_ASSIST"
   | "PLAYER_CARD";
 
-/** Per-gameweek points wallet. Tunable (§12) — the only place the number lives. */
+/** @deprecated Use User.bettingBalance from the DB — kept for legacy tests only. */
 export const STARTING_BALANCE = 1000;
+
+/** Starting virtual £ bank credited to each new user. Matches User.bettingBalance DB default. */
+export const STARTING_MONEY = 1000;
+
+/** Format a money amount as a £ string with thousands separator, e.g. 10000 → "£10,000". */
+export function formatMoney(amount: number): string {
+  return `£${amount.toLocaleString("en-GB")}`;
+}
 
 /** Smallest legal stake. */
 export const MIN_STAKE = 1;
@@ -176,10 +184,69 @@ export function matchMarkets(
   ];
 }
 
-// ───────────────────────── Player-prop settlement (§7, ROADMAP 3.4) ─────────
-// Player props are stored as `Bet.selection = "<kind>:<playerId>"` where kind is
-// scorer | assist | card. They settle from the player's PlayerMatchStat for the
-// fixture — the same feed that settles fantasy points.
+// ───────────────────────── Settlement (post-match) ─────────────────────────
+//
+// Pure resolution of a bet's selection against the final match facts. The job
+// (src/jobs/settle.ts) gathers these facts from our DB and calls this; keeping
+// it pure means every market's win/lose rule is unit-tested with no DB.
+//
+// Two layers:
+//   • settleBetSelection() — MATCH-level markets (1X2 / OU / BTTS) + the simple
+//     scorer check, from the final score + scorer set.
+//   • settlePlayerProp()   — PLAYER props (scorer / assist / card) from a single
+//     player's match stat, with VOID when the player didn't feature (ROADMAP 3.4).
+
+/** The facts a finished fixture provides, enough to settle match markets. */
+export interface MatchResult {
+  homeScore: number;
+  awayScore: number;
+  /** Player ids (Player.id) who scored at least one goal in the match. */
+  scorerIds: Set<string>;
+}
+
+/**
+ * Resolve one MATCH-level bet selection to a settled status.
+ *   - Match/OU/BTTS: decided by the score.
+ *   - "scorer:<playerId>": WON if that player is in scorerIds.
+ * Returns VOID for selections we can't interpret (refunds the stake — safer than
+ * wrongly losing a user's money).
+ */
+export function settleBetSelection(selection: string, r: MatchResult): BetStatus {
+  // Player-prop: anytime goalscorer.
+  if (selection.startsWith("scorer:")) {
+    const playerId = selection.slice("scorer:".length);
+    return r.scorerIds.has(playerId) ? "WON" : "LOST";
+  }
+
+  const totalGoals = r.homeScore + r.awayScore;
+  const bothScored = r.homeScore > 0 && r.awayScore > 0;
+  const homeWin = r.homeScore > r.awayScore;
+  const awayWin = r.awayScore > r.homeScore;
+  const draw = r.homeScore === r.awayScore;
+
+  switch (selection) {
+    case "HOME":
+      return homeWin ? "WON" : "LOST";
+    case "AWAY":
+      return awayWin ? "WON" : "LOST";
+    case "DRAW":
+      return draw ? "WON" : "LOST";
+    case "OVER_2.5":
+      return totalGoals > 2.5 ? "WON" : "LOST";
+    case "UNDER_2.5":
+      return totalGoals < 2.5 ? "WON" : "LOST";
+    case "BTTS_YES":
+      return bothScored ? "WON" : "LOST";
+    case "BTTS_NO":
+      return bothScored ? "LOST" : "WON";
+    default:
+      return "VOID"; // unknown market → refund the stake
+  }
+}
+
+// ── Player props (scorer / assist / card) — ROADMAP 3.4 ──
+// Stored as `Bet.selection = "<kind>:<playerId>"`. They settle from the player's
+// PlayerMatchStat for the fixture — the same feed that settles fantasy points.
 
 export type PlayerPropKind = "scorer" | "assist" | "card";
 
@@ -211,7 +278,10 @@ export function parsePlayerProp(
  *   • card   → WON if any yellow or red
  * else LOST.
  */
-export function settlePlayerProp(kind: PlayerPropKind, stat: PlayerPropStat | null): BetStatus {
+export function settlePlayerProp(
+  kind: PlayerPropKind,
+  stat: PlayerPropStat | null,
+): BetStatus {
   if (!stat || stat.minutes <= 0) return "VOID";
   switch (kind) {
     case "scorer":
@@ -220,5 +290,7 @@ export function settlePlayerProp(kind: PlayerPropKind, stat: PlayerPropStat | nu
       return stat.assists > 0 ? "WON" : "LOST";
     case "card":
       return stat.yellowCards > 0 || stat.redCards > 0 ? "WON" : "LOST";
+    default:
+      return "VOID";
   }
 }
