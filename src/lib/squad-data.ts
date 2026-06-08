@@ -48,6 +48,46 @@ export async function getActiveSquad(
   };
 }
 
+interface RawLatestSP {
+  isStarting: boolean;
+  player: { id: string; name: string; position: string; price: number; team: { country: string } };
+}
+
+/**
+ * Load the user's most recent squad across any gameweek.
+ * Used by the transfer window to find the base squad when no squad exists
+ * yet for the current knockout gameweek.
+ */
+export async function getLatestSquad(userId: string): Promise<LoadedSquad | null> {
+  const raw = await db.squad.findFirst({
+    where: { userId },
+    orderBy: { gameweek: { startsAt: "desc" } },
+    include: {
+      players: { include: { player: { include: { team: true } } } },
+    },
+  });
+  if (!raw) return null;
+
+  const squad = raw as unknown as {
+    id: string;
+    captainId: string | null;
+    players: RawLatestSP[];
+  };
+
+  return {
+    squadId: squad.id,
+    captainId: squad.captainId,
+    players: squad.players.map((sp) => ({
+      id: sp.player.id,
+      name: sp.player.name,
+      position: sp.player.position as Position,
+      price: sp.player.price,
+      country: sp.player.team.country,
+      isStarting: sp.isStarting,
+    })),
+  };
+}
+
 /** Group starters into Pitch rows (GK→DEF→MID→FWD) for the view. */
 export function toPitchRows(
   players: Array<SquadPlayer & { name: string; isStarting: boolean }>,

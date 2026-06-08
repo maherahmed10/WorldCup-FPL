@@ -228,6 +228,25 @@ export function defaultFormationFor(players: SquadPlayer[]): string | null {
 }
 
 /**
+ * Validate swapping one player out for another in a transfer window.
+ * Returns the result of validating the resulting 15-player squad —
+ * same budget, country, and quota rules as validateSquad.
+ */
+export function validateTransfer(
+  current: SquadPlayer[],
+  playerOut: SquadPlayer,
+  playerIn: SquadPlayer,
+): ValidationResult {
+  const next = current.filter((p) => p.id !== playerOut.id).concat(playerIn);
+  return validateSquad(next);
+}
+
+/** Transfer windows only open for knockout-round gameweeks. */
+export function isTransferWindowOpen(gameweek: { isKnockout: boolean }): boolean {
+  return gameweek.isKnockout;
+}
+
+/**
  * Would swapping `benchPlayer` into the XI and `starterPlayer` out keep a valid
  * formation? (1 GK; 3–5 DEF; 2–5 MID; 1–3 FWD; 11 total.) Same-position swaps
  * always pass; cross-position swaps must not break the line bounds.

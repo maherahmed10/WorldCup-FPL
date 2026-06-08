@@ -4,6 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   validateSquad,
+  validateTransfer,
+  isTransferWindowOpen,
   isValidFormation,
   formationName,
   isNamedFormation,
@@ -220,4 +222,29 @@ test("canSwap: same-position sub is always allowed", () => {
   const midOut = starters.find((p) => p.position === "MID")!;
   const midIn = mk("MID", 50, "Z");
   assert.equal(canSwap(starters, midOut, midIn), true);
+});
+
+// ───────────── transfer window ─────────────
+
+test("validateTransfer: valid same-position swap within budget and country rules", () => {
+  const squad = validFifteen(); // total 900, all distinct countries
+  const outPlayer = squad[2]; // a DEF (price 60)
+  const inPlayer = mk("DEF", 60, "SWE"); // same price, new country — still valid
+  const result = validateTransfer(squad, outPlayer, inPlayer);
+  assert.equal(result.valid, true);
+  assert.equal(result.errors.length, 0);
+});
+
+test("validateTransfer: rejects swap that pushes squad over budget", () => {
+  const squad = validFifteen(); // total 900
+  const outPlayer = squad[2]; // price 60
+  const inPlayer = mk("DEF", 200, "SWE"); // 900 - 60 + 200 = 1040 > 1000
+  const result = validateTransfer(squad, outPlayer, inPlayer);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.type === "budget"));
+});
+
+test("isTransferWindowOpen: false for group gameweek, true for knockout", () => {
+  assert.equal(isTransferWindowOpen({ isKnockout: false }), false);
+  assert.equal(isTransferWindowOpen({ isKnockout: true }), true);
 });
