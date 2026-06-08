@@ -71,14 +71,18 @@ model User {
   email          String   @unique
   name           String
   teamName       String?
-  bettingBalance Int      @default(1000) // virtual £ bank — deducted on bet/purchase, credited on win/void
-  createdAt      DateTime @default(now())
+  bettingBalance    Int      @default(5000000) // virtual £ bank — deducted on bet/purchase, credited on win/void
+  squadBudgetBonus  Int      @default(0)       // tenths of a million converted from betting bank after group stage
+  createdAt         DateTime @default(now())
 
   squads          Squad[]
   bets            Bet[]
   leagueMembers   LeagueMember[]
   ownedLeagues    League[]       @relation("LeagueOwner")
   perks           UserPerk[]
+  h2hCreated      H2HChallenge[] @relation("H2HCreator")
+  h2hReceived     H2HChallenge[] @relation("H2HOpponent")
+  h2hWon          H2HChallenge[] @relation("H2HWinner")
 }
 
 model League {
@@ -190,9 +194,10 @@ model Fixture {
   awayTeamId String
   awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id])
 
-  playerStats PlayerMatchStat[]
-  bets        Bet[]
-  odds        FixtureOdds[]
+  playerStats   PlayerMatchStat[]
+  bets          Bet[]
+  odds          FixtureOdds[]
+  h2hChallenges H2HChallenge[]
 
   @@index([kickoff])
   @@index([gameweekId])
@@ -294,6 +299,49 @@ model Bet {
 
   @@index([userId])
   @@index([gameweekId])
+}
+
+// ───────────────────────── Head-to-Head ─────────────────────────
+
+enum H2HStatus {
+  PENDING   // waiting for opponent to accept or reject
+  ACCEPTED  // both stakes locked; active rivalry
+  REJECTED  // opponent rejected; creator stake refunded
+  SETTLED   // winner declared; pot paid out
+  CANCELLED // creator cancelled while still PENDING; stake refunded
+}
+
+// A peer-to-peer side-bet mirroring an existing market selection.
+// Creator picks an open bet, nominates a league friend and a stake.
+// Friend must match the same stake. Winner takes the full pot (2× stake).
+// Settlement is automatic when the linked fixture finishes.
+model H2HChallenge {
+  id         String    @id @default(cuid())
+  creatorId  String    @db.Uuid
+  opponentId String    @db.Uuid
+
+  // Market details (copied from the source bet at creation time)
+  fixtureId  String    // required — drives auto-settlement
+  selection  String    // "HOME" / "AWAY" / "OVER_2.5" / "scorer:id" etc.
+  multiplier Float     // house odds at creation (display only)
+  pickLabel  String    // human label: "Mexico", "Over 2.5", "Mbappé"
+
+  stake      Int       // each side puts this in; pot = 2 × stake
+
+  status     H2HStatus @default(PENDING)
+  winnerId   String?   @db.Uuid
+  settledAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  creator  User    @relation("H2HCreator",  fields: [creatorId],  references: [id])
+  opponent User    @relation("H2HOpponent", fields: [opponentId], references: [id])
+  winner   User?   @relation("H2HWinner",   fields: [winnerId],   references: [id])
+  fixture  Fixture @relation(fields: [fixtureId], references: [id])
+
+  @@index([creatorId])
+  @@index([opponentId])
+  @@index([status])
+  @@index([fixtureId])
 }
 
 // StoreItem — catalogue entry (seeded, not user-created).

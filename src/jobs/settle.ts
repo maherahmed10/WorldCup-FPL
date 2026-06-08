@@ -18,6 +18,7 @@ import {
   payout,
   type MatchResult,
 } from "@/lib/betting";
+import { settleH2HChallenges } from "@/lib/h2h";
 
 function n(v: number | null | undefined): number {
   return v ?? 0;
@@ -103,8 +104,9 @@ export async function settleFixture(apiFixtureId: number) {
   //   • player props (scorer / assist / card)  → settlePlayerPropBets
   const matchBets = await settleFixtureBets(fixture.id);
   const propBets = await settlePlayerPropBets(fixture.id);
+  const h2hSettled = await settleH2HChallenges(fixture.id);
   console.log(
-    `✓ settled fixture ${apiFixtureId}: ${written} stat rows, ${matchBets} match bets, ${propBets} prop bets`,
+    `✓ settled fixture ${apiFixtureId}: ${written} stat rows, ${matchBets} match bets, ${propBets} prop bets, ${h2hSettled} H2H challenges`,
   );
   return written;
 }

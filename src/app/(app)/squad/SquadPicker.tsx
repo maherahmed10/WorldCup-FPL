@@ -56,6 +56,7 @@ export function SquadPicker({
   initialCaptainId,
   maxPerCountry = 3,
   balance = 1000,
+  budgetBonus = 0,
   ownedPerks = [],
   isGroupStage = true,
 }: {
@@ -66,6 +67,7 @@ export function SquadPicker({
   initialCaptainId: string | null;
   maxPerCountry?: number;
   balance?: number;
+  budgetBonus?: number;
   ownedPerks?: PerkLike[];
   isGroupStage?: boolean;
 }) {
@@ -90,7 +92,7 @@ export function SquadPicker({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const validation = validateSquad(squad, { maxPerCountry });
+  const validation = validateSquad(squad, { maxPerCountry, budgetBonus });
   const byPos = countByPosition(squad);
   const countryCounts = countByCountry(squad);
   const pickedIds = useMemo(() => new Set(squad.map((p) => p.id)), [squad]);
@@ -213,7 +215,7 @@ export function SquadPicker({
         </button>
       </div>
 
-      <BudgetBar spent={validation.spent} count={validation.total} />
+      <BudgetBar spent={validation.spent} count={validation.total} bonusBudget={budgetBonus} />
 
       {validation.errors.map((e, i) => (
         <div className="valid-msgs" style={{ marginTop: i === 0 ? 12 : 8 }} key={i}>
