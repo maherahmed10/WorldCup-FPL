@@ -3,7 +3,7 @@
 // before any feed is wired.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { scoreMatch, scoreSquadGameweek, type MatchStatLine } from "./scoring.js";
+import { scoreMatch, scoreSquadGameweek, resolveCaptain, type MatchStatLine } from "./scoring.js";
 
 const base: MatchStatLine = {
   position: "MID",
@@ -72,4 +72,21 @@ test("captain doubles in squad total", () => {
   ];
   assert.equal(scoreSquadGameweek(starters, "a"), 25); // 10*2 + 5
   assert.equal(scoreSquadGameweek(starters, null), 15);
+});
+
+test("resolveCaptain: captain played → captain wears armband", () => {
+  assert.equal(resolveCaptain("cap", "vice", { cap: 90, vice: 90 }), "cap");
+});
+
+test("resolveCaptain: captain DNP → vice wears armband", () => {
+  assert.equal(resolveCaptain("cap", "vice", { cap: 0, vice: 90 }), "vice");
+  assert.equal(resolveCaptain("cap", "vice", { vice: 45 }), "vice"); // cap missing = 0
+});
+
+test("resolveCaptain: neither played → keeps captain (×2 of 0)", () => {
+  assert.equal(resolveCaptain("cap", "vice", { cap: 0, vice: 0 }), "cap");
+});
+
+test("resolveCaptain: null vice → captain even if DNP", () => {
+  assert.equal(resolveCaptain("cap", null, { cap: 0 }), "cap");
 });

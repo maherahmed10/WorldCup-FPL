@@ -7,13 +7,14 @@
 //   • Drag a bench player onto a starter (or vice-versa) to SWAP who starts,
 //     as long as it keeps a valid formation (1 GK; 3–5 DEF; 2–5 MID; 1–3 FWD).
 //   • Tap-to-swap fallback for mobile / no-drag.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { Flag } from "@/components/Flag";
 import { Jersey } from "@/components/Jersey";
 import { BudgetBar } from "@/components/BudgetBar";
 import { MiniStore } from "@/components/MiniStore";
+import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import type { PerkLike } from "@/lib/store";
 import {
   SQUAD_QUOTA,
@@ -54,6 +55,7 @@ export function SquadPicker({
   initialStarterIds,
   initialBenchIds,
   initialCaptainId,
+  initialViceId,
   maxPerCountry = 3,
   balance = 1000,
   ownedPerks = [],
@@ -64,6 +66,7 @@ export function SquadPicker({
   initialStarterIds: string[];
   initialBenchIds: string[];
   initialCaptainId: string | null;
+  initialViceId: string | null;
   maxPerCountry?: number;
   balance?: number;
   ownedPerks?: PerkLike[];
@@ -83,10 +86,16 @@ export function SquadPicker({
     ].filter((e): e is SquadEntry => !!e);
   });
   const [captainId, setCaptainId] = useState<string | null>(initialCaptainId);
+  const [viceId, setViceId] = useState<string | null>(initialViceId);
   // Which slot the picker is filling: a position + whether it's a pitch (starter)
   // slot or a bench slot. null = picker closed.
   const [pickerFor, setPickerFor] = useState<{ pos: Position; starter: boolean } | null>(null);
-  const [selectedForSwap, setSelectedForSwap] = useState<string | null>(null);
+  // A player tapped on the pitch/bench → its action menu is open.
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  // A player whose full profile modal is open (from menu or picker identity zone).
+  const [profileId, setProfileId] = useState<string | null>(null);
+  // True between dragstart and the click it synthesizes, so tap-after-drag is ignored.
+  const draggedRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -105,6 +114,12 @@ export function SquadPicker({
 
   // ── squad mutations ──
   function addPlayer(p: PickerPlayer) {
+    // Hard guard: never exceed the squad quota for a position (2 GK/5 DEF/5 MID/3 FWD).
+    if (byPos[p.position] >= SQUAD_QUOTA[p.position]) {
+      setMessage(`You already have ${SQUAD_QUOTA[p.position]} ${p.position} — remove one first.`);
+      setPickerFor(null);
+      return;
+    }
     const asStarter = pickerFor?.starter ?? true;
     setSquad((prev) => [...prev, { ...p, isStarting: asStarter }]);
     setPickerFor(null);
@@ -112,7 +127,7 @@ export function SquadPicker({
   function removePlayer(id: string) {
     setSquad((prev) => prev.filter((p) => p.id !== id));
     if (captainId === id) setCaptainId(null);
-    if (selectedForSwap === id) setSelectedForSwap(null);
+    if (viceId === id) setViceId(null);
   }
 
   // Swap a starter and a bench player (the sub). Returns whether it happened.
@@ -127,6 +142,9 @@ export function SquadPicker({
       return false;
     }
     setMessage(null);
+    // If the captain/vice gets benched by this swap, clear that role.
+    if (captainId === starter.id) setCaptainId(null);
+    if (viceId === starter.id) setViceId(null);
     setSquad((prev) =>
       prev.map((p) =>
         p.id === starter.id ? { ...p, isStarting: false } : p.id === reserve.id ? { ...p, isStarting: true } : p,
@@ -135,18 +153,33 @@ export function SquadPicker({
     return true;
   }
 
-  // Tap-to-swap: tap a player, then tap one on the other side to swap.
-  function handleTapSwap(id: string) {
-    if (!selectedForSwap) {
-      setSelectedForSwap(id);
+  // Tapping a pitch/bench token opens its action menu — UNLESS the tap is the
+  // synthetic click that follows a drag (draggedRef set in onDragStart). Drag
+  // still swaps directly; a genuine tap opens the menu (profile lives there).
+  function handleTokenTap(id: string) {
+    if (draggedRef.current) {
+      draggedRef.current = false;
       return;
     }
-    if (selectedForSwap === id) {
-      setSelectedForSwap(null);
-      return;
+    setActionMenuId(id);
+  }
+
+  // Auto-substitute: swap a benched player into the XI for the first valid
+  // same-or-compatible starter (used by the menu's "Substitute" item).
+  function autoSubstitute(id: string) {
+    const p = squad.find((x) => x.id === id);
+    if (!p) return;
+    if (p.isStarting) {
+      // starter → find a bench player that can take its place
+      const target = bench.find((b) => canSwap(starters, p, b));
+      if (target) trySwap(p.id, target.id);
+      else setMessage("No valid substitute on the bench for that player.");
+    } else {
+      // bench → find a starter it can replace
+      const target = starters.find((s) => canSwap(starters, s, p));
+      if (target) trySwap(p.id, target.id);
+      else setMessage("That sub can't replace any starter without breaking the formation.");
     }
-    trySwap(selectedForSwap, id);
-    setSelectedForSwap(null);
   }
 
   async function handleSave() {
@@ -155,12 +188,17 @@ export function SquadPicker({
       setMessage("Your starting 11 isn't a valid formation yet.");
       return;
     }
+    if (!captainId || !viceId) {
+      setMessage("You must pick a captain and a vice-captain first — tap a starting player → Make Captain / Make Vice-captain.");
+      return;
+    }
     setSaving(true);
     try {
       const res = await saveSquad({
         starterIds: starters.map((p) => p.id),
         benchIds: bench.map((p) => p.id),
         captainId,
+        viceId,
       });
       if (res.ok) {
         router.push("/team");
@@ -186,16 +224,18 @@ export function SquadPicker({
     const startingHere = starters.filter((p) => p.position === pos);
     startingHere.forEach((p) => pitchRows[pos].push({ position: pos, player: p }));
     if (buildingXI) {
-      // Want up to the 4-3-3 target for this line, but never more than the
-      // remaining empty budget (so the pitch never exceeds 11 slots total).
+      // Want up to the 4-3-3 target for this line, but never more than:
+      //   • the remaining empty budget (pitch ≤ 11 slots total), AND
+      //   • the SQUAD QUOTA for this position (2/5/5/3) minus everyone of that
+      //     position already in the 15 — so you can't add a 4th FWD, etc.
+      const quotaRoom = Math.max(0, SQUAD_QUOTA[pos] - byPos[pos]);
       const want = Math.max(0, INITIAL_XI[pos] - startingHere.length);
-      const show = Math.min(want, emptyBudget);
+      const show = Math.min(want, emptyBudget, quotaRoom);
       for (let i = 0; i < show; i++) pitchRows[pos].push({ position: pos, player: null });
       emptyBudget -= show;
     }
   }
 
-  const canSave = validation.valid && formationOk && !saving;
 
   return (
     <div className="screen">
@@ -207,7 +247,13 @@ export function SquadPicker({
             {gameweekLabel ? ` · ${gameweekLabel}` : ""}
           </div>
         </div>
-        <button className="btn btn-primary" disabled={!canSave} onClick={handleSave}>
+        {/* Green + clickable once the squad/formation are valid — clicking
+            without a captain & vice shows a message rather than silently failing. */}
+        <button
+          className="btn btn-primary"
+          disabled={!validation.valid || !formationOk || saving}
+          onClick={handleSave}
+        >
           <Icon name="check" size={17} />
           {saving ? "Saving…" : "Save Team"}
         </button>
@@ -267,20 +313,21 @@ export function SquadPicker({
             <Pitch
               rows={pitchRows}
               captainId={captainId}
-              selectedId={selectedForSwap}
+              viceId={viceId}
               onEmpty={(pos) => setPickerFor({ pos, starter: true })}
-              onTapPlayer={handleTapSwap}
-              onRemove={removePlayer}
+              onTapPlayer={handleTokenTap}
               onSwap={trySwap}
+              draggedRef={draggedRef}
             />
             <BenchRow
               bench={bench}
-              selectedId={selectedForSwap}
-              onTapPlayer={handleTapSwap}
-              onRemove={removePlayer}
+              captainId={captainId}
+              viceId={viceId}
+              onTapPlayer={handleTokenTap}
               onSwap={trySwap}
               onAdd={(pos) => setPickerFor({ pos, starter: false })}
               byPos={byPos}
+              draggedRef={draggedRef}
             />
           </div>
         </div>
@@ -289,9 +336,9 @@ export function SquadPicker({
           <SquadSummary
             squad={squad}
             captainId={captainId}
+            viceId={viceId}
             countryCounts={countryCounts}
             maxPerCountry={maxPerCountry}
-            onSetCaptain={setCaptainId}
           />
           <MiniStore
             balance={balance}
@@ -311,9 +358,94 @@ export function SquadPicker({
           quotaLeft={SQUAD_QUOTA[pickerFor.pos] - byPos[pickerFor.pos]}
           maxPerCountry={maxPerCountry}
           onPick={addPlayer}
+          onProfile={(id) => setProfileId(id)}
           onClose={() => setPickerFor(null)}
         />
       )}
+
+      {/* Action menu for a tapped pitch/bench player. */}
+      {actionMenuId && (() => {
+        const p = squad.find((x) => x.id === actionMenuId);
+        if (!p) return null;
+        const close = () => setActionMenuId(null);
+        return (
+          <PlayerActionMenu
+            player={p}
+            isCaptain={captainId === p.id}
+            isVice={viceId === p.id}
+            onViewProfile={() => { setProfileId(p.id); close(); }}
+            onCaptain={() => { setCaptainId(p.id); if (viceId === p.id) setViceId(null); close(); }}
+            onVice={() => { setViceId(p.id); if (captainId === p.id) setCaptainId(null); close(); }}
+            onSubstitute={() => { autoSubstitute(p.id); close(); }}
+            onRemove={() => { removePlayer(p.id); close(); }}
+            onClose={close}
+          />
+        );
+      })()}
+
+      {/* Full profile modal (from the action menu or the picker identity zone). */}
+      {profileId && (
+        <PlayerProfileModal playerId={profileId} onClose={() => setProfileId(null)} />
+      )}
+    </div>
+  );
+}
+
+// ───────────────────────── player action menu ─────────────────────────
+
+function PlayerActionMenu({
+  player,
+  isCaptain,
+  isVice,
+  onViewProfile,
+  onCaptain,
+  onVice,
+  onSubstitute,
+  onRemove,
+  onClose,
+}: {
+  player: SquadEntry;
+  isCaptain: boolean;
+  isVice: boolean;
+  onViewProfile: () => void;
+  onCaptain: () => void;
+  onVice: () => void;
+  onSubstitute: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const Item = ({ icon, label, onClick, tone }: { icon: string; label: string; onClick: () => void; tone?: string }) => (
+    <button className={"act-item" + (tone ? " tone-" + tone : "")} onClick={onClick}>
+      <Icon name={icon} size={19} />
+      <span>{label}</span>
+    </button>
+  );
+  return (
+    <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" onMouseDown={(e) => e.stopPropagation()} style={{ animation: "popIn .2s ease", maxWidth: 420 }}>
+        <div className="act-head">
+          <div className="act-jersey"><Jersey country={player.country} size={54} /></div>
+          <div>
+            <div className="act-name">{player.name}</div>
+            <div className="act-meta">
+              <span className={"pos pos-" + player.position}>{player.position}</span>
+              <Flag country={player.country} size={13} round />
+              <span className="muted">{player.country.replace(/-/g, " ")}</span>
+              <span className="muted dim">£{(player.price / 10).toFixed(1)}m</span>
+            </div>
+          </div>
+        </div>
+        <div className="act-list">
+          <Item icon="eye" label="View full profile" onClick={onViewProfile} />
+          <Item icon="star" label={isCaptain ? "Captain (×2) — selected" : "Make Captain (×2)"} onClick={onCaptain} />
+          <Item icon="user" label={isVice ? "Vice-captain — selected" : "Make Vice-captain"} onClick={onVice} />
+          <Item icon="swap" label="Substitute" onClick={onSubstitute} />
+          <Item icon="swap" label="Remove from squad" onClick={onRemove} tone="live" />
+        </div>
+        <div style={{ padding: "0 18px 18px" }}>
+          <button className="btn btn-ghost btn-block" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -323,23 +455,26 @@ export function SquadPicker({
 function PlayerToken({
   entry,
   isCaptain,
-  selected,
+  isVice,
   onTap,
-  onRemove,
   onDropSwap,
+  draggedRef,
 }: {
   entry: SquadEntry;
   isCaptain: boolean;
-  selected: boolean;
+  isVice: boolean;
   onTap: () => void;
-  onRemove: () => void;
   onDropSwap: (draggedId: string) => void;
+  draggedRef: React.MutableRefObject<boolean>;
 }) {
   return (
     <div
-      className={"slot" + (selected ? " slot-selected" : "")}
+      className="slot"
       draggable
-      onDragStart={(e) => e.dataTransfer.setData("text/plain", entry.id)}
+      onDragStart={(e) => {
+        draggedRef.current = true; // suppress the synthetic click that follows
+        e.dataTransfer.setData("text/plain", entry.id);
+      }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -348,18 +483,10 @@ function PlayerToken({
       }}
       onClick={onTap}
       role="button"
+      title={`${entry.name} — tap for options`}
     >
       {isCaptain && <span className="cap-badge">C</span>}
-      <button
-        className="slot-x"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        title="Remove from squad"
-      >
-        <Icon name="close" size={12} />
-      </button>
+      {isVice && !isCaptain && <span className="cap-badge vice">V</span>}
       <div className="slot-jersey"><Jersey country={entry.country} size={46} /></div>
       <div className="slot-flag"><Flag country={entry.country} size={13} round /></div>
       <div className="slot-name">{lastName(entry.name)}</div>
@@ -371,19 +498,19 @@ function PlayerToken({
 function Pitch({
   rows,
   captainId,
-  selectedId,
+  viceId,
   onEmpty,
   onTapPlayer,
-  onRemove,
   onSwap,
+  draggedRef,
 }: {
   rows: Record<Position, PitchSlot[]>;
   captainId: string | null;
-  selectedId: string | null;
+  viceId: string | null;
   onEmpty: (pos: Position) => void;
   onTapPlayer: (id: string) => void;
-  onRemove: (id: string) => void;
   onSwap: (aId: string, bId: string) => boolean;
+  draggedRef: React.MutableRefObject<boolean>;
 }) {
   return (
     <div className="pitch">
@@ -397,10 +524,10 @@ function Pitch({
                   key={slot.player.id}
                   entry={slot.player}
                   isCaptain={slot.player.id === captainId}
-                  selected={slot.player.id === selectedId}
+                  isVice={slot.player.id === viceId}
                   onTap={() => onTapPlayer(slot.player!.id)}
-                  onRemove={() => onRemove(slot.player!.id)}
                   onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
+                  draggedRef={draggedRef}
                 />
               ) : (
                 <button key={pos + i} className="slot slot-empty" onClick={() => onEmpty(pos)}>
@@ -434,20 +561,22 @@ function PitchBg() {
 
 function BenchRow({
   bench,
-  selectedId,
+  captainId,
+  viceId,
   onTapPlayer,
-  onRemove,
   onSwap,
   onAdd,
   byPos,
+  draggedRef,
 }: {
   bench: SquadEntry[];
-  selectedId: string | null;
+  captainId: string | null;
+  viceId: string | null;
   onTapPlayer: (id: string) => void;
-  onRemove: (id: string) => void;
   onSwap: (aId: string, bId: string) => boolean;
   onAdd: (pos: Position) => void;
   byPos: Record<Position, number>;
+  draggedRef: React.MutableRefObject<boolean>;
 }) {
   // Show 4 bench slots; empties prompt to add the position the squad still needs.
   const missing: Position[] = [];
@@ -460,14 +589,17 @@ function BenchRow({
 
   return (
     <div className="bench">
-      <div className="bench-label">Substitutes — drag onto a starter to swap</div>
+      <div className="bench-label">Substitutes — drag onto a starter to swap, or tap for options</div>
       <div className="bench-row">
         {bench.map((p) => (
           <div
             key={p.id}
-            className={"bench-slot" + (p.id === selectedId ? " slot-selected" : "")}
+            className="bench-slot"
             draggable
-            onDragStart={(e) => e.dataTransfer.setData("text/plain", p.id)}
+            onDragStart={(e) => {
+              draggedRef.current = true;
+              e.dataTransfer.setData("text/plain", p.id);
+            }}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
@@ -476,10 +608,10 @@ function BenchRow({
             }}
             onClick={() => onTapPlayer(p.id)}
             role="button"
+            title={`${p.name} — tap for options`}
           >
-            <button className="slot-x" onClick={(e) => { e.stopPropagation(); onRemove(p.id); }} title="Remove">
-              <Icon name="close" size={11} />
-            </button>
+            {p.id === captainId && <span className="cap-badge">C</span>}
+            {p.id === viceId && p.id !== captainId && <span className="cap-badge vice">V</span>}
             <span className={"bench-pos pos pos-" + p.position}>{p.position}</span>
             <Jersey country={p.country} size={32} />
             <span className="bench-name">{lastName(p.name)}</span>
@@ -502,17 +634,18 @@ function BenchRow({
 function SquadSummary({
   squad,
   captainId,
+  viceId,
   countryCounts,
   maxPerCountry,
-  onSetCaptain,
 }: {
   squad: SquadEntry[];
   captainId: string | null;
+  viceId: string | null;
   countryCounts: Record<string, number>;
   maxPerCountry: number;
-  onSetCaptain: (id: string) => void;
 }) {
   const captain = squad.find((p) => p.id === captainId) ?? null;
+  const vice = squad.find((p) => p.id === viceId) ?? null;
   const entries = Object.entries(countryCounts).sort((a, b) => b[1] - a[1]);
   return (
     <div className="card" style={{ padding: 16 }}>
@@ -528,21 +661,20 @@ function SquadSummary({
           <span className="dim">Not set</span>
         )}
       </div>
-      <div className="sum-divider" />
-      <div className="sum-title">Set captain</div>
-      <p className="sum-hint" style={{ marginTop: 6 }}>Captain scores double:</p>
-      <div className="quota" style={{ marginTop: 8 }}>
-        {squad.length === 0 ? (
-          <span className="dim" style={{ fontSize: 13 }}>No players yet</span>
+      <div className="sum-row">
+        <span className="muted">Vice-captain</span>
+        {vice ? (
+          <span className="sum-cap">
+            <Flag country={vice.country} size={14} round />
+            <b>{lastName(vice.name)}</b>
+          </span>
         ) : (
-          squad.map((p) => (
-            <button key={p.id} className={"quota-item" + (captainId === p.id ? " full" : "")} onClick={() => onSetCaptain(p.id)}>
-              <Flag country={p.country} size={15} round />
-              <span className="qn">{lastName(p.name)}</span>
-            </button>
-          ))
+          <span className="dim">Not set</span>
         )}
       </div>
+      <p className="sum-hint" style={{ marginTop: 6 }}>
+        Tap a starting player → <b>Make Captain</b> / <b>Make Vice-captain</b>. Both required to save.
+      </p>
       <div className="sum-divider" />
       <div className="sum-title">Country quota</div>
       <div className="quota">
@@ -558,7 +690,7 @@ function SquadSummary({
           <span className="dim" style={{ fontSize: 13 }}>No players yet</span>
         )}
       </div>
-      <p className="sum-hint">Tap a slot to add. Tap a player then tap another to swap (or drag).</p>
+      <p className="sum-hint">Tap a slot to add. Tap a player for options (profile, captain, sub, remove). Drag a sub onto a starter to swap.</p>
     </div>
   );
 }
@@ -576,6 +708,7 @@ function PickerModal({
   quotaLeft,
   maxPerCountry,
   onPick,
+  onProfile,
   onClose,
 }: {
   position: Position;
@@ -586,6 +719,7 @@ function PickerModal({
   quotaLeft: number;
   maxPerCountry: number;
   onPick: (p: PickerPlayer) => void;
+  onProfile: (id: string) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
@@ -676,30 +810,48 @@ function PickerModal({
                 const already = pickedIds.has(p.id);
                 const countryFull = !already && (countryCounts[p.country] ?? 0) >= maxPerCountry;
                 const tooPricey = !already && p.price > remaining;
-                const disabled = already || countryFull;
+                const addDisabled = already || countryFull;
+                const reason = already ? "Already in squad" : countryFull ? `Max ${maxPerCountry} per country` : "";
                 return (
-                  <button
-                    key={p.id}
-                    className={"prow" + (disabled ? " disabled" : "")}
-                    disabled={disabled}
-                    onClick={() => !disabled && onPick(p)}
-                  >
-                    <span className="prow-flag"><Jersey country={p.country} size={30} /></span>
-                    <span className="prow-id">
-                      <span className="prow-name">{p.name}</span>
-                      <span className="prow-meta">
-                        <span className={"pos pos-" + p.position}>{p.position}</span>
-                        <Flag country={p.country} size={13} round />
-                        <span className="muted">{p.country.replace(/-/g, " ")}</span>
+                  <div key={p.id} className={"prow" + (already ? " picked" : "")}>
+                    {/* identity zone — always tappable, opens the profile */}
+                    <button
+                      className="prow-id-btn"
+                      onClick={() => onProfile(p.id)}
+                      title={`View ${p.name}’s profile`}
+                    >
+                      <span className="prow-flag"><Jersey country={p.country} size={30} /></span>
+                      <span className="prow-id">
+                        <span className="prow-name">{p.name}</span>
+                        <span className="prow-meta">
+                          <span className={"pos pos-" + p.position}>{p.position}</span>
+                          <Flag country={p.country} size={13} round />
+                          <span className="muted">{p.country.replace(/-/g, " ")}</span>
+                        </span>
                       </span>
-                    </span>
-                    <span className="prow-num">
-                      <span className="prow-price num">£{(p.price / 10).toFixed(1)}</span>
-                      {already && <span className="prow-sub">In squad</span>}
-                      {countryFull && <span className="prow-sub" style={{ color: "var(--live)" }}>Max {maxPerCountry}</span>}
-                      {tooPricey && !disabled && <span className="prow-sub" style={{ color: "var(--gold)" }}>Over budget</span>}
-                    </span>
-                  </button>
+                      <span className="prow-num">
+                        <span className="prow-price num">£{(p.price / 10).toFixed(1)}</span>
+                        {countryFull && <span className="prow-sub" style={{ color: "var(--live)" }}>Max {maxPerCountry}</span>}
+                        {tooPricey && !addDisabled && <span className="prow-sub" style={{ color: "var(--gold)" }}>Over budget</span>}
+                      </span>
+                      <span className="prow-hint" aria-hidden><Icon name="eye" size={15} /></span>
+                    </button>
+                    {/* action zone — add to squad (disabled when ineligible) */}
+                    <button
+                      className={"prow-action" + (addDisabled ? " disabled" : "")}
+                      disabled={addDisabled}
+                      title={addDisabled ? reason : `Add ${p.name} to squad`}
+                      onClick={() => !addDisabled && onPick(p)}
+                    >
+                      {already ? (
+                        <span className="pill pill-accent"><Icon name="check" size={13} /> In</span>
+                      ) : countryFull ? (
+                        <Icon name="lock" size={16} style={{ color: "var(--text-3)" }} />
+                      ) : (
+                        <span className="add-btn"><Icon name="plus" size={18} /></span>
+                      )}
+                    </button>
+                  </div>
                 );
               })
             )}
