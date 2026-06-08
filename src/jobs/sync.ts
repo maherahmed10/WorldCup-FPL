@@ -173,26 +173,29 @@ type StatBlock = {
   goals: { total: number | null; assists: number | null };
 };
 function aggregateStats(blocks: StatBlock[] | undefined) {
+  // Track sums AND whether any block actually had a non-null value, so we can
+  // distinguish a true 0 (e.g. a striker with 0 goals) from "the API has no data"
+  // (common for smaller leagues — render those as "—", not "0").
   let apps = 0, minutes = 0, goals = 0, assists = 0;
+  let hasApps = false, hasMinutes = false, hasGoals = false, hasAssists = false;
   let ratingWeighted = 0, ratingMinutes = 0;
   for (const b of blocks ?? []) {
-    apps += b.games.appearences ?? 0;
-    const mins = b.games.minutes ?? 0;
-    minutes += mins;
-    goals += b.goals.total ?? 0;
-    assists += b.goals.assists ?? 0;
+    if (b.games.appearences != null) { apps += b.games.appearences; hasApps = true; }
+    if (b.games.minutes != null) { minutes += b.games.minutes; hasMinutes = true; }
+    if (b.goals.total != null) { goals += b.goals.total; hasGoals = true; }
+    if (b.goals.assists != null) { assists += b.goals.assists; hasAssists = true; }
     const r = b.games.rating ? Number(b.games.rating) : null;
+    const mins = b.games.minutes ?? 0;
     if (r && mins > 0) {
       ratingWeighted += r * mins;
       ratingMinutes += mins;
     }
   }
-  const hasAny = (blocks?.length ?? 0) > 0;
   return {
-    apps: hasAny ? apps : null,
-    minutes: hasAny ? minutes : null,
-    goals: hasAny ? goals : null,
-    assists: hasAny ? assists : null,
+    apps: hasApps ? apps : null,
+    minutes: hasMinutes ? minutes : null,
+    goals: hasGoals ? goals : null,
+    assists: hasAssists ? assists : null,
     rating: ratingMinutes > 0 ? Math.round((ratingWeighted / ratingMinutes) * 100) / 100 : null,
   };
 }
