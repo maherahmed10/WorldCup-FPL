@@ -27,6 +27,7 @@ export const BUDGET = 1000; // 100.0M in tenths
 export const SQUAD_QUOTA: Record<Position, number> = { GK: 2, DEF: 5, MID: 5, FWD: 3 };
 export const SQUAD_SIZE = 15;
 export const MAX_PER_COUNTRY = 3;
+export const TRANSFERS_PER_WINDOW = 3;
 
 // Valid starting-XI formation bounds (the 11 on the pitch).
 export const XI_SIZE = 11;
@@ -177,6 +178,62 @@ export function canAddCountry(
 /** Can we still add a player of this position without exceeding the quota? */
 export function canAddPosition(players: SquadPlayer[], position: Position): boolean {
   return countByPosition(players)[position] < SQUAD_QUOTA[position];
+}
+
+// ───────────────────────── bench auto-subs ─────────────────────────
+//
+// FPL rule: after a gameweek, any starter who played 0 minutes is replaced by
+// the first bench player (in priority order) who DID play and keeps a legal
+// named formation. GKs are only replaced by GKs (enforced by the formation
+// check — removing a GK always fails the 1-GK requirement).
+
+export interface PlayerWithMinutes extends SquadPlayer {
+  minutesPlayed: number;
+}
+
+export interface AutoSubLog {
+  out: PlayerWithMinutes;
+  in: PlayerWithMinutes;
+}
+
+export interface AutoSubResult {
+  starters: PlayerWithMinutes[];
+  bench: PlayerWithMinutes[];
+  subs: AutoSubLog[];
+}
+
+/**
+ * Apply FPL-style bench auto-subs for one gameweek.
+ *
+ * @param starters  The starting XI (11 players) with minutes played this GW.
+ * @param bench     The 4 bench players in priority order (index 0 = first sub).
+ * @returns         Final starters + remaining bench + log of each substitution.
+ */
+export function applyAutoSubs(
+  starters: PlayerWithMinutes[],
+  bench: PlayerWithMinutes[],
+): AutoSubResult {
+  const currentStarters = [...starters];
+  const remainingBench = [...bench];
+  const subs: AutoSubLog[] = [];
+
+  for (let i = 0; i < currentStarters.length; i++) {
+    const starter = currentStarters[i];
+    if (starter.minutesPlayed > 0) continue;
+
+    // Find the first bench player who played AND keeps a legal formation.
+    const subIdx = remainingBench.findIndex(
+      (b) => b.minutesPlayed > 0 && canSwap(currentStarters, starter, b),
+    );
+    if (subIdx === -1) continue;
+
+    const sub = remainingBench[subIdx];
+    subs.push({ out: starter, in: sub });
+    currentStarters[i] = sub;
+    remainingBench.splice(subIdx, 1);
+  }
+
+  return { starters: currentStarters, bench: remainingBench, subs };
 }
 
 // ───────────────────── starting XI / bench (FPL model) ─────────────────────

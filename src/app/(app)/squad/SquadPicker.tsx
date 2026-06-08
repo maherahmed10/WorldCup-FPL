@@ -13,6 +13,8 @@ import { Icon } from "@/components/Icon";
 import { Flag } from "@/components/Flag";
 import { Jersey } from "@/components/Jersey";
 import { BudgetBar } from "@/components/BudgetBar";
+import { MiniStore } from "@/components/MiniStore";
+import type { PerkLike } from "@/lib/store";
 import {
   SQUAD_QUOTA,
   XI_SIZE,
@@ -53,6 +55,9 @@ export function SquadPicker({
   initialBenchIds,
   initialCaptainId,
   maxPerCountry = 3,
+  balance = 1000,
+  ownedPerks = [],
+  isGroupStage = true,
 }: {
   pool: PickerPlayer[];
   gameweekLabel: string;
@@ -60,6 +65,9 @@ export function SquadPicker({
   initialBenchIds: string[];
   initialCaptainId: string | null;
   maxPerCountry?: number;
+  balance?: number;
+  ownedPerks?: PerkLike[];
+  isGroupStage?: boolean;
 }) {
   const router = useRouter();
   const byId = useMemo(() => new Map(pool.map((p) => [p.id, p])), [pool]);
@@ -284,6 +292,11 @@ export function SquadPicker({
             countryCounts={countryCounts}
             maxPerCountry={maxPerCountry}
             onSetCaptain={setCaptainId}
+          />
+          <MiniStore
+            balance={balance}
+            ownedPerks={ownedPerks}
+            isGroupStage={isGroupStage}
           />
         </div>
       </div>

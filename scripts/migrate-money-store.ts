@@ -72,6 +72,12 @@ async function main() {
   `);
   console.log("✓ Store catalogue seeded (4 items)");
 
+  await db.$executeRawUnsafe(`
+    ALTER TABLE "Squad"
+      ADD COLUMN IF NOT EXISTS "transfersUsed" INTEGER NOT NULL DEFAULT 0;
+  `);
+  console.log("✓ Squad.transfersUsed column");
+
   await db.$disconnect();
   console.log("Migration complete.");
 }

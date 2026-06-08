@@ -22,22 +22,15 @@ test("canAffordPerk: returns false when balance < cost", () => {
   assert.equal(canAffordPerk(0, 1), false);
 });
 
-// ── country slot perk ───────────────────────────────────────────────────────
+// ── country slot perk (removed from catalogue — always returns 3) ───────────
 
-test("getMaxPerCountry: returns 3 without perk, 4 with country_slot perk", () => {
+test("getMaxPerCountry: always returns 3 (country_slot removed from catalogue)", () => {
   assert.equal(getMaxPerCountry([]), 3);
-
-  const withPerk: PerkLike[] = [
+  // Even if a legacy perk_country_slot row somehow exists, it has no effect now.
+  const legacy: PerkLike[] = [
     { storeItemId: "perk_country_slot", gameweekId: null, usedAt: null },
   ];
-  assert.equal(getMaxPerCountry(withPerk), 4);
-});
-
-test("getMaxPerCountry: consumed perk (usedAt set) still returns 3", () => {
-  const used: PerkLike[] = [
-    { storeItemId: "perk_country_slot", gameweekId: null, usedAt: new Date() },
-  ];
-  assert.equal(getMaxPerCountry(used), 3);
+  assert.equal(getMaxPerCountry(legacy), 3);
 });
 
 // ── extra captain perk ──────────────────────────────────────────────────────

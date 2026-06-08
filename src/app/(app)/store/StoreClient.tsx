@@ -16,9 +16,11 @@ export interface OwnedPerk {
 export function StoreClient({
   balance,
   ownedPerks,
+  isGroupStage,
 }: {
   balance: number;
   ownedPerks: OwnedPerk[];
+  isGroupStage: boolean;
 }) {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -83,7 +85,8 @@ export function StoreClient({
         {STORE_ITEMS.map((item) => {
           const owned = ownedByItem.get(item.id) ?? [];
           const activeCount = owned.filter((p) => p.usedAt === null).length;
-          const canBuy = balance >= item.cost;
+          const benchBoostLocked = item.effectKey === "bench_boost" && isGroupStage;
+          const canBuy = balance >= item.cost && !benchBoostLocked;
           const icon = PERK_ICON[item.effectKey] ?? "✨";
 
           return (
@@ -114,6 +117,15 @@ export function StoreClient({
                 </div>
               </div>
 
+              {benchBoostLocked && (
+                <div
+                  className="mb-2 rounded-lg px-3 py-2 text-xs font-semibold"
+                  style={{ background: "var(--surface-3)", color: "var(--text-2)" }}
+                >
+                  Available after the group stage
+                </div>
+              )}
+
               <button
                 disabled={!canBuy || pending}
                 onClick={() => buy(item.id)}
@@ -123,7 +135,13 @@ export function StoreClient({
                   color: canBuy ? "var(--accent-ink)" : "var(--text-3)",
                 }}
               >
-                {pending ? "Buying…" : canBuy ? `Buy for £${item.cost}` : "Insufficient funds"}
+                {pending
+                  ? "Buying…"
+                  : benchBoostLocked
+                  ? "Locked"
+                  : canBuy
+                  ? `Buy for £${item.cost}`
+                  : "Insufficient funds"}
               </button>
             </div>
           );

@@ -14,7 +14,9 @@ import {
   toPitchRows,
 } from "@/lib/squad-data";
 import { totalPrice } from "@/lib/squad-rules";
+import type { PerkLike } from "@/lib/store";
 import { TeamNamePrompt } from "./TeamNamePrompt";
+import { MiniStore } from "@/components/MiniStore";
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -77,6 +79,14 @@ export default async function TeamPage() {
   // GW points come from settled PlayerMatchStat; none yet pre-tournament → 0s.
   const gwPoints: Record<string, number> = {};
 
+  // Store data for mini store panel
+  const rawPerks = await db.userPerk.findMany({
+    where: { userId: user.id },
+    select: { storeItemId: true, gameweekId: true, usedAt: true },
+  });
+  const ownedPerks = rawPerks as PerkLike[];
+  const isGroupStage = !(gameweek?.isKnockout ?? false);
+
   return (
     <div className="screen">
       <div className="screen-head head-row">
@@ -133,6 +143,12 @@ export default async function TeamPage() {
               ))
             )}
           </div>
+
+          <MiniStore
+            balance={appUser?.bettingBalance ?? 1000}
+            ownedPerks={ownedPerks}
+            isGroupStage={isGroupStage}
+          />
         </div>
       </div>
     </div>

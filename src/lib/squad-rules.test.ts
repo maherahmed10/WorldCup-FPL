@@ -13,10 +13,12 @@ import {
   canFieldFormation,
   splitStartingXI,
   defaultFormationFor,
+  applyAutoSubs,
   totalPrice,
   BUDGET,
   type SquadPlayer,
   type Position,
+  type PlayerWithMinutes,
 } from "./squad-rules.js";
 
 let seq = 0;
@@ -220,4 +222,87 @@ test("canSwap: same-position sub is always allowed", () => {
   const midOut = starters.find((p) => p.position === "MID")!;
   const midIn = mk("MID", 50, "Z");
   assert.equal(canSwap(starters, midOut, midIn), true);
+});
+
+// ───────────── bench auto-subs ─────────────────────────────────────
+
+const mkM = (pos: Position, mins: number): PlayerWithMinutes =>
+  ({ ...mk(pos, 50, pos + mins), minutesPlayed: mins });
+
+// Build a 4-3-3 starting XI with one non-playing FWD.
+function starters433(nonPlayingPos: Position, nonPlayingIdx = 0): PlayerWithMinutes[] {
+  const xi: PlayerWithMinutes[] = [
+    mkM("GK", 90),
+    mkM("DEF", 90), mkM("DEF", 90), mkM("DEF", 90), mkM("DEF", 90),
+    mkM("MID", 90), mkM("MID", 90), mkM("MID", 90),
+    mkM("FWD", 90), mkM("FWD", 90), mkM("FWD", 90),
+  ];
+  // Zero out the nth player of nonPlayingPos
+  let count = 0;
+  for (let i = 0; i < xi.length; i++) {
+    if (xi[i].position === nonPlayingPos && count++ === nonPlayingIdx) {
+      xi[i] = { ...xi[i], minutesPlayed: 0 };
+      break;
+    }
+  }
+  return xi;
+}
+
+test("applyAutoSubs: replaces non-playing starter with first eligible bench player", () => {
+  // 4-3-3, one FWD didn't play. Bench: bench_GK(0 mins), bench_FWD(90 mins), bench_DEF, bench_MID.
+  const starters = starters433("FWD");
+  const bench: PlayerWithMinutes[] = [
+    mkM("GK", 0),   // priority 1 — didn't play, skip
+    mkM("FWD", 90), // priority 2 — played, same position → sub in
+    mkM("DEF", 90),
+    mkM("MID", 90),
+  ];
+
+  const { starters: after, subs } = applyAutoSubs(starters, bench);
+
+  assert.equal(subs.length, 1);
+  assert.equal(subs[0].out.position, "FWD");
+  assert.equal(subs[0].in.position, "FWD");
+  // The non-playing FWD is gone; bench FWD is now starting.
+  assert.ok(after.some((p) => p.id === subs[0].in.id));
+  assert.ok(!after.some((p) => p.id === subs[0].out.id));
+  // Formation still valid (FWD for FWD, shape unchanged).
+  assert.ok(formationName(after) !== null);
+});
+
+test("applyAutoSubs: skips sub when every eligible bench player would break the formation", () => {
+  // 3-5-2 — one DEF didn't play. Only bench player who played is a FWD.
+  // Swapping DEF for FWD → 2-5-3 which is not a legal named formation → no sub.
+  const s: PlayerWithMinutes[] = [
+    mkM("GK", 90),
+    mkM("DEF", 0), mkM("DEF", 90), mkM("DEF", 90), // first DEF didn't play
+    mkM("MID", 90), mkM("MID", 90), mkM("MID", 90), mkM("MID", 90), mkM("MID", 90),
+    mkM("FWD", 90), mkM("FWD", 90),
+  ];
+  const bench: PlayerWithMinutes[] = [
+    mkM("GK", 0),   // didn't play
+    mkM("FWD", 90), // played, but DEF→FWD would give 2-5-3 (illegal)
+    mkM("FWD", 90),
+    mkM("FWD", 90),
+  ];
+
+  const { subs } = applyAutoSubs(s, bench);
+  assert.equal(subs.length, 0, "no sub should happen when formation would break");
+});
+
+test("applyAutoSubs: GK only replaced by GK even when outfielders have higher bench priority", () => {
+  // Bench priority: DEF first, then GK. Non-playing starter is the GK.
+  // DEF cannot legally replace GK (would leave 0 GKs → fails formation).
+  const starters = starters433("GK");
+  const bench: PlayerWithMinutes[] = [
+    mkM("DEF", 90), // priority 1 — can't replace GK (formation fails)
+    mkM("GK", 90),  // priority 2 — same position, legal
+    mkM("MID", 90),
+    mkM("FWD", 90),
+  ];
+
+  const { subs } = applyAutoSubs(starters, bench);
+  assert.equal(subs.length, 1);
+  assert.equal(subs[0].out.position, "GK");
+  assert.equal(subs[0].in.position, "GK", "GK must be replaced by GK");
 });

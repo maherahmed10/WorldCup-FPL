@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentGameweek } from "@/lib/squad-data";
 import { STORE_ITEMS, canAffordPerk } from "@/lib/store";
 
 export type PurchaseResult = { ok: true } | { ok: false; error: string };
@@ -13,6 +14,14 @@ export async function purchaseItem(storeItemId: string): Promise<PurchaseResult>
 
   const item = STORE_ITEMS.find((i) => i.id === storeItemId);
   if (!item) return { ok: false, error: "Item not found." };
+
+  // Bench Boost is only available after the group stage (knockout rounds only)
+  if (item.effectKey === "bench_boost") {
+    const gameweek = await getCurrentGameweek();
+    if (!gameweek?.isKnockout) {
+      return { ok: false, error: "Bench Boost is only available after the group stage." };
+    }
+  }
 
   if (!canAffordPerk(user.bettingBalance, item.cost)) {
     return {

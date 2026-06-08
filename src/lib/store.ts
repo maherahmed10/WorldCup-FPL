@@ -8,13 +8,6 @@
 
 export const STORE_ITEMS = [
   {
-    id: "perk_country_slot",
-    name: "+1 Country Slot",
-    description: "Raise the max players per country in your squad from 3 to 4.",
-    cost: 500,
-    effectKey: "country_slot" as const,
-  },
-  {
     id: "perk_extra_captain",
     name: "Extra Captain",
     description: "Your captain scores triple points for one gameweek.",
@@ -74,9 +67,9 @@ export function hasActivePerk(
   });
 }
 
-/** Max players per country: 3 normally, 4 with the country_slot perk. */
-export function getMaxPerCountry(perks: PerkLike[]): number {
-  return hasActivePerk(perks, "country_slot") ? 4 : 3;
+/** Max players per country: always 3 (country_slot perk removed from catalogue). */
+export function getMaxPerCountry(_perks: PerkLike[]): number {
+  return 3;
 }
 
 /** Captain multiplier for a gameweek: 2 normally, 3 with extra_captain perk. */

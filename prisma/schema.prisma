@@ -232,10 +232,11 @@ model PlayerMatchStat {
 // Squad — a user's 15-player team valid from a given gameweek window.
 // A new Squad row is created when a knockout transfer window opens.
 model Squad {
-  id         String @id @default(cuid())
-  userId     String @db.Uuid
-  gameweekId String // valid-from window
-  captainId  String? // Player.id scoring x2
+  id            String @id @default(cuid())
+  userId        String @db.Uuid
+  gameweekId    String // valid-from window
+  captainId     String? // Player.id scoring x2
+  transfersUsed Int    @default(0) // transfers made this window (resets with each new Squad row)
 
   user     User          @relation(fields: [userId], references: [id])
   gameweek Gameweek      @relation(fields: [gameweekId], references: [id])
