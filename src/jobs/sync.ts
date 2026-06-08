@@ -157,6 +157,58 @@ function normalizePosition(p?: string | null): Position {
   }
 }
 
+// "188 cm" → 188 ; "81 kg" → 81 ; null/garbage → null
+function parseUnit(v: string | null | undefined): number | null {
+  if (!v) return null;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+// ── Player profiles: bio + season stats from /players?team=X (for the player
+// detail UI). ~2 pages per team → ~96 requests for all 48. Players must be
+// synced first (matches on apiPlayerId). Season stats are 0/null pre-tournament
+// and accumulate as matches are played — re-run periodically to refresh.
+export async function syncPlayerProfiles() {
+  const teams = await db.team.findMany();
+  const knownApiIds = new Set((await db.player.findMany({ select: { apiPlayerId: true } })).map((p) => p.apiPlayerId));
+  let updated = 0;
+  for (const team of teams) {
+    for (let page = 1; page <= 3; page++) {
+      let profiles;
+      try {
+        profiles = await apiFootball.playerProfiles(team.apiTeamId, page);
+      } catch (e) {
+        console.error(`  ✗ profiles ${team.name} p${page}:`, (e as Error).message);
+        break;
+      }
+      if (profiles.length === 0) break; // no more pages
+      for (const entry of profiles) {
+        if (!knownApiIds.has(entry.player.id)) continue; // not in our pool
+        // Pick the World Cup stats block if present, else the first.
+        const st = entry.statistics?.[0];
+        await db.player.updateMany({
+          where: { apiPlayerId: entry.player.id },
+          data: {
+            age: entry.player.age,
+            nationality: entry.player.nationality,
+            heightCm: parseUnit(entry.player.height),
+            weightKg: parseUnit(entry.player.weight),
+            injured: entry.player.injured ?? false,
+            seasonAppearances: st?.games.appearences ?? null,
+            seasonMinutes: st?.games.minutes ?? null,
+            seasonGoals: st?.goals.total ?? null,
+            seasonAssists: st?.goals.assists ?? null,
+            seasonRating: st?.games.rating ? Number(st.games.rating) : null,
+          },
+        });
+        updated++;
+      }
+      if (profiles.length < 20) break; // last page
+    }
+  }
+  console.log(`✓ player profiles: ${updated} players enriched (bio + season stats)`);
+}
+
 // ── Standings: populate Team.group ("Group A" … "Group L") from /standings. ──
 // Run once after the draw; safe to re-run (idempotent updates).
 export async function syncStandings() {
@@ -268,6 +320,7 @@ if (/(^|\/)sync\.(ts|js)$/.test(process.argv[1] ?? "")) {
     which === "teams" ? syncTeams
     : which === "fixtures" ? syncFixtures
     : which === "players" ? syncPlayers
+    : which === "profiles" ? syncPlayerProfiles
     : which === "gameweeks" ? syncGameweeks
     : which === "standings" ? syncStandings
     : which === "odds" ? syncOdds

@@ -120,6 +120,9 @@ model Team {
 }
 
 // Player — pricing is OUR call (the API gives no projected points).
+// Bio + season-stats fields are synced from /players?team=X&season (for the
+// player profile/widget UI). All nullable — populated by syncPlayerProfiles,
+// 0/empty before that runs.
 model Player {
   id          String   @id @default(cuid())
   apiPlayerId Int      @unique
@@ -127,6 +130,20 @@ model Player {
   position    Position
   price       Int // tenths of a million? keep integer; e.g. 130 = 13.0M. See seed.
   photoUrl    String?
+
+  // ── bio (from /players profile) ──
+  age         Int?
+  nationality String?
+  heightCm    Int? // parsed from "188 cm"
+  weightKg    Int? // parsed from "81 kg"
+  injured     Boolean @default(false)
+
+  // ── season stats (from /players?season — accumulates as the tournament plays) ──
+  seasonAppearances Int?
+  seasonMinutes     Int?
+  seasonGoals       Int?
+  seasonAssists     Int?
+  seasonRating      Float? // average 0–10
 
   teamId String
   team   Team   @relation(fields: [teamId], references: [id])

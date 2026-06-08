@@ -83,6 +83,25 @@ export interface ApiSquad {
   }>;
 }
 
+// Rich player profile + season stats — /players?team=X&season&page=N (20/page).
+// Bio is always present; statistics accumulate as the tournament is played.
+export interface ApiPlayerProfile {
+  player: {
+    id: number;
+    name: string;
+    age: number | null;
+    nationality: string | null;
+    height: string | null; // e.g. "188 cm"
+    weight: string | null; // e.g. "81 kg"
+    injured: boolean;
+    photo: string | null;
+  };
+  statistics: Array<{
+    games: { appearences: number | null; minutes: number | null; rating: string | null };
+    goals: { total: number | null; assists: number | null };
+  }>;
+}
+
 // Per-player match stats — settles fantasy AND bets (§5).
 export interface ApiFixturePlayerStat {
   player: { id: number; name: string };
@@ -130,6 +149,13 @@ export const apiFootball = {
   // Official 26-man squad for one team — the roster source for the player pool.
   // Loop over all 48 teams (one request each) to build the full pool.
   squad: (teamId: number) => get<ApiSquad>(`/players/squads?team=${teamId}`),
+
+  // Rich player profiles + season stats for one team (paginated, 20/page).
+  // ~2 pages per 26-man squad → ~96 requests for all 48 teams.
+  playerProfiles: (teamId: number, page = 1) =>
+    get<ApiPlayerProfile>(
+      `/players?team=${teamId}&season=${SEASON}&page=${page}`,
+    ),
 
   standings: () =>
     get<ApiStanding>(`/standings?league=${WORLD_CUP_LEAGUE}&season=${SEASON}`),
