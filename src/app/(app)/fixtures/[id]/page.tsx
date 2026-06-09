@@ -80,6 +80,34 @@ export default async function FixtureDetailPage({
     : [];
   const byApiId = new Map(ourPlayers.map((p) => [p.apiPlayerId, p]));
 
+  // Aggregate events per player (by API id) → goal/assist/card/sub badges.
+  const eventsByApiId = new Map<number, { goals: number; assists: number; yellow: boolean; red: boolean; subbed: boolean }>();
+  const bump = (apiId: number | null, patch: Partial<{ goals: number; assists: number; yellow: boolean; red: boolean; subbed: boolean }>) => {
+    if (apiId == null) return;
+    const cur = eventsByApiId.get(apiId) ?? { goals: 0, assists: 0, yellow: false, red: false, subbed: false };
+    eventsByApiId.set(apiId, {
+      goals: cur.goals + (patch.goals ?? 0),
+      assists: cur.assists + (patch.assists ?? 0),
+      yellow: cur.yellow || !!patch.yellow,
+      red: cur.red || !!patch.red,
+      subbed: cur.subbed || !!patch.subbed,
+    });
+  };
+  for (const e of rawEvents) {
+    const d = e.detail.toLowerCase();
+    if (e.type === "Goal") {
+      bump(e.playerApiId, { goals: 1 });
+      bump(e.assistApiId, { assists: 1 });
+    } else if (e.type === "Card") {
+      if (d.includes("red")) bump(e.playerApiId, { red: true });
+      else if (d.includes("yellow")) bump(e.playerApiId, { yellow: true });
+    } else if (e.type.toLowerCase().startsWith("subst")) {
+      bump(e.playerApiId, { subbed: true });
+      bump(e.assistApiId, { subbed: true });
+    }
+  }
+  const emptyEvents = { goals: 0, assists: 0, yellow: false, red: false, subbed: false };
+
   const statsData: MatchStatsData | null =
     rawStats.length > 0 || rawEvents.length > 0 || rawLineups.length > 0
       ? {
@@ -114,6 +142,7 @@ export default async function FixtureDetailPage({
             grid: l.grid ?? null,
             isSubstitute: l.isSubstitute,
             ourId: byApiId.get(l.playerApiId)?.id ?? null,
+            events: eventsByApiId.get(l.playerApiId) ?? emptyEvents,
           })),
         }
       : null;

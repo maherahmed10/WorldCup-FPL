@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Flag } from "@/components/Flag";
 import { Jersey } from "@/components/Jersey";
+import { Icon } from "@/components/Icon";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { eventPoints } from "@/lib/scoring";
 
@@ -50,6 +51,14 @@ export interface MatchStatisticData {
   value: string;
 }
 
+export interface PlayerEventSummary {
+  goals: number;
+  assists: number;
+  yellow: boolean;
+  red: boolean;
+  subbed: boolean; // came off / on
+}
+
 export interface MatchLineupData {
   id: string;
   teamId: string;
@@ -61,6 +70,7 @@ export interface MatchLineupData {
   grid: string | null;
   isSubstitute: boolean;
   ourId: string | null; // our Player.id (null = not in our pool → not clickable)
+  events: PlayerEventSummary; // goal/assist/card/sub badges for this player
 }
 
 export interface MatchStatsData {
@@ -616,13 +626,13 @@ function LineupCard({
         )}
       </div>
 
-      {/* Mini pitch — starting XI positioned by row */}
+      {/* Pitch — reuses the real .pitch/.slot styling from the home/My Team pitch */}
       {rows.length > 0 && (
-        <div className="mini-pitch">
-          <MiniPitchBg />
-          <div className="mini-pitch-rows">
+        <div className="pitch lineup-pitch">
+          <LineupPitchBg />
+          <div className="pitch-rows">
             {rows.map((row, ri) => (
-              <div key={ri} className="mini-pitch-row">
+              <div key={ri} className="pitch-row">
                 {row.map((p) => (
                   <PlayerToken key={p.id} player={p} country={team.country} onClick={onPlayerClick} />
                 ))}
@@ -649,6 +659,7 @@ function LineupCard({
                 style={{ background: "var(--surface-2)", borderColor: "var(--line)", cursor: p.ourId ? "pointer" : "default" }}
               >
                 <span className="text-xs font-semibold" style={{ color: "var(--text)" }}>{p.playerName}</span>
+                <EventBadges ev={p.events} inline />
                 {p.pos && (
                   <span className="rounded px-1 text-[10px] font-bold uppercase" style={{ background: posColor(p.pos) + "22", color: posColor(p.pos) }}>
                     {p.pos}
@@ -663,7 +674,7 @@ function LineupCard({
   );
 }
 
-// A single pitch token: jersey + last name, clickable → profile (if in our pool).
+// A single pitch token: real .slot styling + jersey + name, with event badges.
 function PlayerToken({ player: p, country, onClick }: { player: MatchLineupData; country: string; onClick: (id: string) => void }) {
   const last = p.playerName.split(" ").slice(-1)[0];
   return (
@@ -671,22 +682,40 @@ function PlayerToken({ player: p, country, onClick }: { player: MatchLineupData;
       type="button"
       disabled={!p.ourId}
       onClick={() => p.ourId && onClick(p.ourId)}
-      className="mini-token"
-      style={{ cursor: p.ourId ? "pointer" : "default" }}
+      className="slot"
+      style={{ background: "none", cursor: p.ourId ? "pointer" : "default" }}
       title={p.ourId ? `View ${p.playerName}` : p.playerName}
     >
-      <span className="mini-token-jersey"><Jersey country={country} size={30} /></span>
-      <span className="mini-token-name">{last}</span>
+      <EventBadges ev={p.events} />
+      <div className="slot-jersey"><Jersey country={country} size={42} /></div>
+      <div className="slot-name">{last}</div>
     </button>
   );
 }
 
-function MiniPitchBg() {
+// Goal / assist / card / sub icons for a player. On the pitch they stack in the
+// top-right of the jersey; inline (bench) they sit after the name.
+function EventBadges({ ev, inline }: { ev: PlayerEventSummary; inline?: boolean }) {
+  const badges: React.ReactNode[] = [];
+  for (let i = 0; i < ev.goals; i++) badges.push(<span key={"g" + i} className="ev-badge ev-goal" title="Goal">⚽</span>);
+  if (ev.assists > 0) badges.push(<span key="a" className="ev-badge ev-assist" title={`${ev.assists} assist${ev.assists > 1 ? "s" : ""}`}>🅰{ev.assists > 1 ? ev.assists : ""}</span>);
+  if (ev.yellow) badges.push(<span key="y" className="ev-badge ev-yellow" title="Yellow card" />);
+  if (ev.red) badges.push(<span key="r" className="ev-badge ev-red" title="Red card" />);
+  if (ev.subbed) badges.push(<span key="s" className="ev-badge ev-sub" title="Substituted"><Icon name="swap" size={9} /></span>);
+  if (badges.length === 0) return null;
+  return <span className={inline ? "ev-badges inline" : "ev-badges"}>{badges}</span>;
+}
+
+function LineupPitchBg() {
   return (
-    <svg className="mini-pitch-lines" viewBox="0 0 300 380" preserveAspectRatio="none">
+    <svg className="pitch-lines" viewBox="0 0 300 380" preserveAspectRatio="none"
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 1 }}>
       <rect x={6} y={6} width={288} height={368} rx={6} fill="none" stroke="var(--pitch-line)" strokeWidth={1.5} />
       <line x1={6} y1={190} x2={294} y2={190} stroke="var(--pitch-line)" strokeWidth={1.2} />
       <circle cx={150} cy={190} r={42} fill="none" stroke="var(--pitch-line)" strokeWidth={1.2} />
+      <circle cx={150} cy={190} r={2.5} fill="var(--pitch-line)" />
+      <rect x={95} y={6} width={110} height={46} fill="none" stroke="var(--pitch-line)" strokeWidth={1.2} />
+      <rect x={95} y={328} width={110} height={46} fill="none" stroke="var(--pitch-line)" strokeWidth={1.2} />
     </svg>
   );
 }

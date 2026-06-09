@@ -362,23 +362,21 @@
 .pp-bd-total .pp-bd-label { font-weight: 800; color: var(--text); }
 .pp-bd-empty { font-size: 12px; color: var(--text-3); padding: 4px 0; }
 
-/* Match-detail mini-pitch (lineups tab) */
-.mini-pitch {
-  position: relative;
-  background: linear-gradient(180deg, #16361f 0%, #122a19 100%);
-  aspect-ratio: 3 / 3.6;
-  padding: 10px 6px;
+/* Match-detail lineup pitch — reuses .pitch/.slot; tweaks + event badges. */
+.lineup-pitch { border-radius: 0; box-shadow: inset 0 0 60px rgba(0,0,0,.3); }
+.lineup-pitch .slot-name { font-size: 10px; padding: 1px 6px; }
+.lineup-pitch .slot:disabled:hover { transform: none; }
+
+/* Event badges on a pitch token (top-right of the jersey) + inline (bench). */
+.ev-badges { position: absolute; top: -4px; right: 4px; z-index: 5; display: flex; gap: 2px; }
+.ev-badges.inline { position: static; margin-left: 2px; }
+.ev-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 14px; height: 14px; border-radius: 4px; font-size: 9px; font-weight: 800;
+  line-height: 1; padding: 0 2px;
 }
-.mini-pitch-lines { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; }
-.mini-pitch-rows { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: space-around; }
-.mini-pitch-row { display: flex; justify-content: space-evenly; align-items: center; gap: 4px; }
-.mini-token { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; padding: 2px; min-width: 0; }
-.mini-token:disabled { cursor: default; }
-.mini-token:not(:disabled):hover .mini-token-name { background: var(--accent); color: var(--accent-ink); }
-.mini-token-jersey { line-height: 0; }
-.mini-token-name {
-  font-size: 10px; font-weight: 800; color: var(--text);
-  background: rgba(0,0,0,.55); padding: 1px 5px; border-radius: 5px;
-  max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  transition: background .12s, color .12s;
-}
+.ev-goal { background: #fff; border-radius: 50%; width: 14px; padding: 0; font-size: 10px; }
+.ev-assist { background: var(--blue); color: #fff; }
+.ev-yellow { background: var(--gold); width: 9px; height: 13px; border-radius: 2px; }
+.ev-red { background: var(--live); width: 9px; height: 13px; border-radius: 2px; }
+.ev-sub { background: var(--accent); color: var(--accent-ink); }
