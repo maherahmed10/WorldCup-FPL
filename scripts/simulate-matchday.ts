@@ -216,15 +216,69 @@ async function simulateGameweek(label: string) {
     console.log(`  ✓ ${f.homeTeam.name} ${homeGoals}-${awayGoals} ${f.awayTeam.name}  ·  ${written} stats · settled ${b} bets / ${pp} props / ${pl} parlays / ${h} H2H`);
   }
 
-  // ── backdate the gameweek's DEADLINE into the past (only if still future) so
-  //    rival squads unlock, the banner advances, and the round reads as played ──
+  // ── backdate the gameweek's DEADLINE *and* its window (startsAt/endsAt) into
+  //    the past so: rival squads unlock, the banner advances, AND getCurrentGameweek
+  //    (first GW with endsAt >= now) moves on to the next un-played round. This is
+  //    what flips the app into the knockout phase (store/transfers/bank) once the
+  //    group stage is simulated. Only shift if still in the future (idempotent). ──
   if (gw.deadline.getTime() > Date.now() - BACKDATE_MS) {
     await db.gameweek.update({
       where: { id: gw.id },
-      data: { deadline: new Date(gw.deadline.getTime() - BACKDATE_MS) },
+      data: {
+        deadline: new Date(gw.deadline.getTime() - BACKDATE_MS),
+        startsAt: new Date(gw.startsAt.getTime() - BACKDATE_MS),
+        endsAt: new Date(gw.endsAt.getTime() - BACKDATE_MS),
+      },
     });
-    console.log(`  ✓ backdated "${label}" deadline into the past (rival squads now unlock, banner advances)`);
+    console.log(`  ✓ backdated "${label}" window into the past (advances current GW, unlocks rival squads)`);
   }
+
+  // ── knockout: advance each match's winner into the next round's fixtures ──
+  if (gw.isKnockout) await advanceKnockoutWinners(label);
+}
+
+// Knockout bracket order (each round halves; winners feed the next round).
+const KO_ORDER = ["Round of 32", "Round of 16", "Quarter-finals", "Semi-finals", "Final & 3rd place"];
+
+// After a knockout round is played, write each match's WINNER into the next
+// round's placeholder fixtures: round match i's winner → next round match
+// floor(i/2), home if i even else away. (Final has no next round.)
+async function advanceKnockoutWinners(label: string) {
+  const idx = KO_ORDER.indexOf(label);
+  if (idx < 0 || idx >= KO_ORDER.length - 1) return; // unknown or the Final
+  const nextLabel = KO_ORDER[idx + 1];
+
+  const gw = await db.gameweek.findFirst({ where: { label } });
+  const nextGw = await db.gameweek.findFirst({ where: { label: nextLabel } });
+  if (!gw || !nextGw) return;
+
+  const matches = await db.fixture.findMany({
+    where: { gameweekId: gw.id, status: "FINISHED" },
+    orderBy: { kickoff: "asc" },
+    select: { homeTeamId: true, awayTeamId: true, homeScore: true, awayScore: true },
+  });
+  const nextFixtures = await db.fixture.findMany({
+    where: { gameweekId: nextGw.id },
+    orderBy: { kickoff: "asc" },
+    select: { id: true },
+  });
+  if (!nextFixtures.length) return;
+
+  let advanced = 0;
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    // KO: no draws in our sim sampler usually, but if tied pick home as winner.
+    const winner = (m.homeScore ?? 0) >= (m.awayScore ?? 0) ? m.homeTeamId : m.awayTeamId;
+    const nextIdx = Math.floor(i / 2);
+    const next = nextFixtures[nextIdx];
+    if (!next) continue;
+    await db.fixture.update({
+      where: { id: next.id },
+      data: i % 2 === 0 ? { homeTeamId: winner } : { awayTeamId: winner },
+    });
+    advanced++;
+  }
+  console.log(`  ✓ advanced ${advanced} winners into ${nextLabel}`);
 }
 
 // PlayerMatchStat has no `position`/`sub` columns (position is only for scoreMatch).
@@ -396,9 +450,16 @@ async function resetGameweek(label: string, hard: boolean) {
   for (const f of backdatedFx) {
     await db.fixture.update({ where: { id: f.id }, data: { kickoff: new Date(f.kickoff.getTime() + BACKDATE_MS) } });
   }
-  // un-backdate the gameweek deadline if it was shifted
+  // un-backdate the gameweek window (deadline + startsAt + endsAt) if it was shifted
   if (gw.deadline < cutoff) {
-    await db.gameweek.update({ where: { id: gw.id }, data: { deadline: new Date(gw.deadline.getTime() + BACKDATE_MS) } });
+    await db.gameweek.update({
+      where: { id: gw.id },
+      data: {
+        deadline: new Date(gw.deadline.getTime() + BACKDATE_MS),
+        startsAt: new Date(gw.startsAt.getTime() + BACKDATE_MS),
+        endsAt: new Date(gw.endsAt.getTime() + BACKDATE_MS),
+      },
+    });
   }
 
   // 3) re-open wagers touching these fixtures
