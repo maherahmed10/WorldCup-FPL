@@ -29,11 +29,11 @@ export function PlayersClient({ players }: { players: PlayerView[] }) {
 
   return (
     <div>
-      <div className="mb-1">
-        <h1 className="font-[family-name:var(--font-display)] text-3xl font-extrabold">Players</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
+      <div className="screen-head">
+        <h1>Players</h1>
+        <div className="sub">
           {players.length} players · scout the market by points, form and price
-        </p>
+        </div>
       </div>
 
       <FilterBar filter={filter} onChange={patch} countries={countries} />
