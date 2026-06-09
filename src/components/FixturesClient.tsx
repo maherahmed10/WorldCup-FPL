@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { sortGroupStandings, type GroupStandings } from "@/lib/leagues";
 
 // ── Serialisable types passed from the server component ──────────────────────
@@ -154,13 +155,16 @@ function FixtureRow({ fixture: f, divider }: { fixture: FixtureData; divider: bo
   const isLive = f.status === "LIVE";
   const isFinished = f.status === "FINISHED";
   const kickoff = new Date(f.kickoff);
+  const router = useRouter();
 
   return (
     <div
       className="flex items-center gap-3 px-4 py-3"
+      onClick={isFinished ? () => router.push(`/fixtures/${f.id}`) : undefined}
       style={{
         borderBottom: divider ? "1px solid var(--line)" : undefined,
         background: isLive ? "rgba(255,77,94,0.05)" : undefined,
+        cursor: isFinished ? "pointer" : undefined,
       }}
     >
       {/* Time / status */}
@@ -227,15 +231,20 @@ function FixtureRow({ fixture: f, divider }: { fixture: FixtureData; divider: bo
         </div>
       </div>
 
-      {/* Venue */}
-      {f.venue && (
-        <div
-          className="hidden w-32 flex-shrink-0 truncate text-right text-xs sm:block"
-          style={{ color: "var(--text-3)" }}
-        >
-          {f.venue}
-        </div>
-      )}
+      {/* Venue / chevron */}
+      <div className="hidden w-32 flex-shrink-0 sm:flex items-center justify-end gap-1">
+        {f.venue && (
+          <span
+            className="truncate text-xs"
+            style={{ color: "var(--text-3)" }}
+          >
+            {f.venue}
+          </span>
+        )}
+        {isFinished && (
+          <span style={{ color: "var(--text-3)", fontSize: 12 }}>›</span>
+        )}
+      </div>
     </div>
   );
 }

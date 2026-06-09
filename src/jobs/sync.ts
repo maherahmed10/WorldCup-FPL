@@ -10,7 +10,14 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { db } from "@/lib/db";
-import { apiFootball, type ApiFixture, type ApiStanding } from "@/lib/api-football";
+import {
+  apiFootball,
+  type ApiFixture,
+  type ApiStanding,
+  type ApiMatchEvent,
+  type ApiTeamStatistic,
+  type ApiTeamLineup,
+} from "@/lib/api-football";
 import {
   GAMEWEEK_DEFS,
   bucketForKickoff,
@@ -356,6 +363,115 @@ export async function syncOdds() {
   console.log(`✓ odds: ${rows} odds rows across ${priced} fixtures (others outside 7-day window)`);
 }
 
+// ── Match stats: events + statistics + lineups for FINISHED fixtures. ──
+// Fetches 3 endpoints per fixture (~240 calls for the full 80-game tournament).
+// Idempotent: skips fixtures that already have statistics rows.
+export async function syncMatchStats() {
+  const teamIdByApi = new Map(
+    (await db.team.findMany({ select: { id: true, apiTeamId: true } })).map(
+      (t) => [t.apiTeamId, t.id],
+    ),
+  );
+
+  const fixtures = await db.fixture.findMany({
+    where: {
+      status: "FINISHED",
+      matchStatistics: { none: {} }, // only fixtures not yet enriched
+    },
+    select: { id: true, apiFixtureId: true },
+  });
+
+  let synced = 0;
+  for (const f of fixtures) {
+    try {
+      await syncOneFixtureStats(f.id, f.apiFixtureId, teamIdByApi);
+      synced++;
+    } catch (e) {
+      console.error(`  ✗ match stats fixture ${f.apiFixtureId}:`, (e as Error).message);
+    }
+    await sleep(350); // pace: ~3 batches/sec (3 API calls per iteration)
+  }
+  console.log(`✓ match stats: ${synced}/${fixtures.length} fixtures enriched`);
+}
+
+async function syncOneFixtureStats(
+  fixtureDbId: string,
+  apiFixtureId: number,
+  teamIdByApi: Map<number, string>,
+) {
+  const [eventsRaw, statsRaw, lineupsRaw] = await Promise.all([
+    apiFootball.fixtureEvents(apiFixtureId),
+    apiFootball.fixtureStatistics(apiFixtureId),
+    apiFootball.fixtureLineups(apiFixtureId),
+  ]);
+
+  // ── Events ──
+  for (const ev of eventsRaw as ApiMatchEvent[]) {
+    const teamId = teamIdByApi.get(ev.team.id);
+    if (!teamId) continue;
+    await db.matchEvent.create({
+      data: {
+        fixtureId: fixtureDbId,
+        teamId,
+        playerApiId: ev.player.id ?? null,
+        playerName: ev.player.name ?? "",
+        assistApiId: ev.assist.id ?? null,
+        assistName: ev.assist.name ?? null,
+        minute: ev.time.elapsed,
+        extraMinute: ev.time.extra ?? null,
+        type: ev.type,
+        detail: ev.detail,
+        comments: ev.comments ?? null,
+      },
+    });
+  }
+
+  // ── Statistics ──
+  for (const ts of statsRaw as ApiTeamStatistic[]) {
+    const teamId = teamIdByApi.get(ts.team.id);
+    if (!teamId) continue;
+    for (const s of ts.statistics) {
+      await db.matchStatistic.upsert({
+        where: { fixtureId_teamId_key: { fixtureId: fixtureDbId, teamId, key: s.type } },
+        update: { value: s.value != null ? String(s.value) : "" },
+        create: {
+          fixtureId: fixtureDbId,
+          teamId,
+          key: s.type,
+          value: s.value != null ? String(s.value) : "",
+        },
+      });
+    }
+  }
+
+  // ── Lineups ──
+  for (const tl of lineupsRaw as ApiTeamLineup[]) {
+    const teamId = teamIdByApi.get(tl.team.id);
+    if (!teamId) continue;
+    const formation = tl.formation ?? null;
+
+    const upsert = (p: ApiTeamLineup["startXI"][number]["player"], isSub: boolean) =>
+      db.matchLineup.upsert({
+        where: { fixtureId_teamId_playerApiId: { fixtureId: fixtureDbId, teamId, playerApiId: p.id } },
+        update: {},
+        create: {
+          fixtureId: fixtureDbId,
+          teamId,
+          formation,
+          playerApiId: p.id,
+          playerName: p.name,
+          playerNumber: p.number ?? null,
+          pos: p.pos ?? null,
+          grid: p.grid ?? null,
+          isSubstitute: isSub,
+        },
+      });
+
+    for (const { player: p } of tl.startXI) await upsert(p, false);
+    for (const { player: p } of tl.substitutes) await upsert(p, true);
+  }
+}
+
 export async function fullSync() {
   await syncGameweeks();
   await syncTeams();
@@ -380,6 +496,7 @@ if (/(^|\/)sync\.(ts|js)$/.test(process.argv[1] ?? "")) {
     : which === "gameweeks" ? syncGameweeks
     : which === "standings" ? syncStandings
     : which === "odds" ? syncOdds
+    : which === "matchstats" ? syncMatchStats
     : fullSync;
   run()
     .then(() => process.exit(0))

@@ -121,9 +121,12 @@ model Team {
   logoUrl    String?
   eliminated Boolean @default(false)
 
-  players   Player[]
-  homeGames Fixture[] @relation("HomeTeam")
-  awayGames Fixture[] @relation("AwayTeam")
+  players         Player[]
+  homeGames       Fixture[]       @relation("HomeTeam")
+  awayGames       Fixture[]       @relation("AwayTeam")
+  matchEvents     MatchEvent[]    @relation("EventTeam")
+  matchStatistics MatchStatistic[] @relation("StatTeam")
+  matchLineups    MatchLineup[]   @relation("LineupTeam")
 }
 
 // Player — pricing is OUR call (the API gives no projected points).
@@ -199,10 +202,13 @@ model Fixture {
   awayTeamId String
   awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id])
 
-  playerStats   PlayerMatchStat[]
-  bets          Bet[]
-  odds          FixtureOdds[]
-  h2hChallenges H2HChallenge[]
+  playerStats     PlayerMatchStat[]
+  bets            Bet[]
+  odds            FixtureOdds[]
+  h2hChallenges   H2HChallenge[]
+  matchEvents     MatchEvent[]
+  matchStatistics MatchStatistic[]
+  matchLineups    MatchLineup[]
 
   @@index([kickoff])
   @@index([gameweekId])
@@ -378,6 +384,70 @@ model PlayerFavourite {
 
   @@id([userId, playerId])
   @@index([userId])
+}
+
+// ───────────────────────── Match stats (synced after FINISHED) ─────────────────────────
+
+// In-match events: goals, assists, cards, substitutions.
+// playerApiId / assistApiId reference the API-Football player id (no DB FK —
+// not every event player is in our Player table).
+model MatchEvent {
+  id           String  @id @default(cuid())
+  fixtureId    String
+  teamId       String
+  playerApiId  Int? // API-Football player id
+  playerName   String
+  assistApiId  Int?
+  assistName   String?
+  minute       Int
+  extraMinute  Int?
+  type         String  // "Goal" | "Card" | "subst" | "Var"
+  detail       String  // "Normal Goal" | "Yellow Card" | "Red Card" | "Substitution 1" etc.
+  comments     String?
+
+  fixture Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  team    Team    @relation("EventTeam", fields: [teamId], references: [id])
+
+  @@index([fixtureId])
+  @@index([teamId])
+}
+
+// Team-level statistics per fixture (possession %, shots, corners, etc.)
+// value stored as-is from the API (e.g. "45%", "12", null → "").
+model MatchStatistic {
+  id        String @id @default(cuid())
+  fixtureId String
+  teamId    String
+  key       String // "Ball Possession" | "Total Shots" | "Corner Kicks" etc.
+  value     String // raw API value
+
+  fixture Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  team    Team    @relation("StatTeam", fields: [teamId], references: [id])
+
+  @@unique([fixtureId, teamId, key])
+  @@index([fixtureId])
+}
+
+// Starting XI + bench per team per fixture.
+// formation stored once per team (same value on all rows for that team).
+model MatchLineup {
+  id            String  @id @default(cuid())
+  fixtureId     String
+  teamId        String
+  formation     String? // e.g. "4-3-3" (same for all rows of a team)
+  playerApiId   Int
+  playerName    String
+  playerNumber  Int?
+  pos           String? // "G" | "D" | "M" | "F"
+  grid          String? // "1:1" | "2:3" — formation grid position (null for bench)
+  isSubstitute  Boolean @default(false)
+
+  fixture Fixture @relation(fields: [fixtureId], references: [id], onDelete: Cascade)
+  team    Team    @relation("LineupTeam", fields: [teamId], references: [id])
+
+  @@unique([fixtureId, teamId, playerApiId])
+  @@index([fixtureId])
+  @@index([teamId])
 }
 
 // StoreItem — catalogue entry (seeded, not user-created).
