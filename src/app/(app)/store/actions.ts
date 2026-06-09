@@ -15,12 +15,11 @@ export async function purchaseItem(storeItemId: string): Promise<PurchaseResult>
   const item = STORE_ITEMS.find((i) => i.id === storeItemId);
   if (!item) return { ok: false, error: "Item not found." };
 
-  // Bench Boost is only available after the group stage (knockout rounds only)
-  if (item.effectKey === "bench_boost") {
-    const gameweek = await getCurrentGameweek();
-    if (!gameweek?.isKnockout) {
-      return { ok: false, error: "Bench Boost is only available after the group stage." };
-    }
+  // The whole store is locked until the group stage ends — you can't spend until
+  // your squad budget + stipend + winnings merge into one bank in the knockouts.
+  const gameweek = await getCurrentGameweek();
+  if (!gameweek?.isKnockout) {
+    return { ok: false, error: "The store unlocks after the group stage." };
   }
 
   if (!canAffordPerk(user.bettingBalance, item.cost)) {

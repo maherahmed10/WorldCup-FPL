@@ -15,8 +15,8 @@ export async function createH2HFromBet(
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not authenticated" };
 
-  if (!Number.isInteger(stake) || stake < 1)
-    return { ok: false, error: "Stake must be a whole number ≥ £1" };
+  if (!Number.isInteger(stake) || stake < 100_000)
+    return { ok: false, error: "Minimum head-to-head stake is £100,000." };
   if (stake > user.bettingBalance)
     return { ok: false, error: `Insufficient balance (have £${user.bettingBalance.toLocaleString("en-GB")})` };
   if (opponentId === user.id)
@@ -102,8 +102,8 @@ export async function createH2HFromMarket(
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not authenticated" };
 
-  if (!Number.isInteger(stake) || stake < 1)
-    return { ok: false, error: "Stake must be a whole number ≥ £1" };
+  if (!Number.isInteger(stake) || stake < 100_000)
+    return { ok: false, error: "Minimum head-to-head stake is £100,000." };
   if (stake > user.bettingBalance)
     return { ok: false, error: `Insufficient balance (have £${user.bettingBalance.toLocaleString("en-GB")})` };
   if (opponentId === user.id)

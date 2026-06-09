@@ -9,6 +9,8 @@ import {
   canPlaceBet,
   matchMarkets,
   scorerMultiplier,
+  assistMultiplier,
+  cardMultiplier,
   settleBetSelection,
   parsePlayerProp,
   settlePlayerProp,
@@ -102,12 +104,14 @@ test("availableBalance: mixed ledger and default starting balance", () => {
 });
 
 test("canPlaceBet: can't stake more than balance, must be a positive integer", () => {
-  assert.equal(canPlaceBet(100, 900), true);
-  assert.equal(canPlaceBet(900, 900), true); // exactly the balance is fine
-  assert.equal(canPlaceBet(901, 900), false); // over balance
-  assert.equal(canPlaceBet(0, 900), false); // below MIN_STAKE
-  assert.equal(canPlaceBet(-10, 900), false);
-  assert.equal(canPlaceBet(10.5, 900), false); // fractional
+  const bal = 900_000;
+  assert.equal(canPlaceBet(50_000, bal), true); // exactly MIN_STAKE
+  assert.equal(canPlaceBet(bal, bal), true); // exactly the balance is fine
+  assert.equal(canPlaceBet(bal + 1, bal), false); // over balance
+  assert.equal(canPlaceBet(0, bal), false); // below MIN_STAKE
+  assert.equal(canPlaceBet(49_999, bal), false); // just under MIN_STAKE
+  assert.equal(canPlaceBet(-10, bal), false);
+  assert.equal(canPlaceBet(50_000.5, bal), false); // fractional
 });
 
 test("matchMarkets: 3 groups, stable selection keys", () => {
@@ -151,6 +155,27 @@ test("scorerMultiplier: clamped to [1.6, 8.0] and 2dp", () => {
   assert.equal(Math.round(hi * 100) / 100, hi); // already 2dp
 });
 
+test("assistMultiplier: creators (MID) pay less than defenders; varies by player", () => {
+  const p = 70;
+  assert.ok(assistMultiplier("MID", p) < assistMultiplier("FWD", p));
+  assert.ok(assistMultiplier("FWD", p) < assistMultiplier("DEF", p));
+  // not flat: a £10m mid differs from a £4.5m mid
+  assert.notEqual(assistMultiplier("MID", 100), assistMultiplier("MID", 45));
+  // clamped + 2dp
+  const lo = assistMultiplier("MID", 130);
+  assert.ok(lo >= 2.0 && assistMultiplier("GK", 40) <= 9.0);
+});
+
+test("cardMultiplier: defenders pay least; forwards/keepers most; varies", () => {
+  const p = 60;
+  assert.ok(cardMultiplier("DEF", p) < cardMultiplier("MID", p));
+  assert.ok(cardMultiplier("MID", p) < cardMultiplier("FWD", p));
+  // pricier player booked slightly less → higher odds
+  assert.ok(cardMultiplier("DEF", 110) > cardMultiplier("DEF", 45));
+  // clamped [2.3, 7.0]
+  assert.ok(cardMultiplier("DEF", 45) >= 2.3 && cardMultiplier("GK", 130) <= 7.0);
+});
+
 // ── Money economy (2.1) ────────────────────────────────────────────────────
 
 test("money balance: availableBalance uses STARTING_MONEY correctly", () => {
@@ -160,10 +185,10 @@ test("money balance: availableBalance uses STARTING_MONEY correctly", () => {
 });
 
 test("money balance: can't stake more than bettingBalance", () => {
-  const balance = 350;
-  assert.equal(canPlaceBet(350, balance), true);  // exact balance is fine
-  assert.equal(canPlaceBet(351, balance), false); // one over
-  assert.equal(canPlaceBet(0, balance), false);   // zero stake
+  const balance = 350_000;
+  assert.equal(canPlaceBet(350_000, balance), true);  // exact balance is fine
+  assert.equal(canPlaceBet(350_001, balance), false); // one over
+  assert.equal(canPlaceBet(0, balance), false);       // zero stake
 });
 
 test("money payout rounding: £ amounts behave identically to points math", () => {

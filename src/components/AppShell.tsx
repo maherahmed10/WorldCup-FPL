@@ -22,7 +22,7 @@ const NAV = [
   { id: "home", label: "Home", icon: "home", href: "/home" },
   { id: "team", label: "My Team", icon: "team", href: "/team" },
   { id: "players", label: "Players", icon: "players", href: "/players" },
-  { id: "predict", label: "Predictions", icon: "predictions", href: "/predict" },
+  { id: "predict", label: "Bets", icon: "predictions", href: "/predict" },
   { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues" },
   { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures" },
 ];

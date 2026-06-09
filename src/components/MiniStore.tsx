@@ -54,7 +54,7 @@ export function MiniStore({
   return (
     <div className="card" style={{ padding: 16, marginTop: 12 }}>
       {/* Header row */}
-      <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: isGroupStage ? 6 : 12 }}>
         <div className="sum-title">Store</div>
         <div className="flex items-center gap-1">
           <span className="num text-sm font-extrabold" style={{ color: "var(--accent)" }}>
@@ -64,12 +64,25 @@ export function MiniStore({
         </div>
       </div>
 
+      {/* During the group stage the store is locked — bank is your betting stipend
+          only; it merges with your leftover squad budget after the group stage. */}
+      {isGroupStage && (
+        <div
+          className="mb-3 rounded-lg px-3 py-2 text-[11px] font-semibold"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text-3)" }}
+        >
+          🔒 Unlocks after the group stage — your bank merges your leftover squad
+          budget, your £5M betting stipend, and any winnings.
+        </div>
+      )}
+
       {/* Perk rows */}
       <div className="flex flex-col gap-2">
         {STORE_ITEMS.map((item) => {
           const icon = PERK_ICON[item.effectKey] ?? "✨";
           const ownedCount = activeCountByItem.get(item.id) ?? 0;
-          const locked = item.effectKey === "bench_boost" && isGroupStage;
+          // Whole store is locked until the group stage ends.
+          const locked = isGroupStage;
           const affordable = balance >= item.cost;
           const disabled = locked || !affordable || (pending && buyingId === item.id);
 
