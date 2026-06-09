@@ -380,3 +380,46 @@
 .ev-yellow { background: var(--gold); width: 9px; height: 13px; border-radius: 2px; }
 .ev-red { background: var(--live); width: 9px; height: 13px; border-radius: 2px; }
 .ev-sub { background: var(--accent); color: var(--accent-ink); }
+
+/* -------------- PLAYERS IN ACTION TODAY -------------- */
+.pia { border-radius: var(--r-lg); border: 1px solid rgba(24,224,138,.28); overflow: hidden;
+  background: radial-gradient(110% 130% at 100% -20%, rgba(24,224,138,.10), transparent 55%), var(--surface); }
+.pia-head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px 12px; }
+.pia-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pia-icon { font-size: 20px; line-height: 1; flex: 0 0 auto; }
+.pia-label { font-weight: 800; font-size: 14px; }
+.pia-sub { font-size: 11px; color: var(--accent); font-weight: 700; margin-top: 1px; }
+.pia-meta { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.pia-live-badge { font-size: 10px; font-weight: 900; color: var(--live);
+  letter-spacing: .04em; animation: piaLivePulse 1.4s ease infinite; }
+@keyframes piaLivePulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+.pia-groups { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.pia-group { border-bottom: 1px solid var(--line); }
+.pia-group:last-child { border-bottom: none; }
+.pia-fixture { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 16px 7px; background: var(--surface-2); }
+.pia-matchup { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700;
+  min-width: 0; flex: 1; }
+.pia-team { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+.pia-vs { font-size: 10px; font-weight: 800; color: var(--text-3); flex: 0 0 auto; }
+.pia-time { font-size: 12px; font-weight: 800; color: var(--text-2); flex: 0 0 auto;
+  display: flex; align-items: center; gap: 4px; }
+.pia-time-live { color: var(--live); }
+.pia-time-done { color: var(--text-3); }
+.pia-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); flex: 0 0 auto;
+  animation: piaLivePulse 1.4s ease infinite; }
+.pia-ft { font-size: 10px; color: var(--text-3); }
+.pia-players { display: flex; flex-direction: column; gap: 1px; padding: 6px 16px 8px; }
+.pia-player { display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid var(--line); }
+.pia-player:last-child { border-bottom: none; }
+.pia-player.pia-capt { background: rgba(24,224,138,.06); margin: 0 -16px; padding: 5px 16px;
+  border-radius: 0; }
+.pia-name { flex: 1; font-size: 13px; font-weight: 700; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pia-badge { font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: var(--r-pill); flex: 0 0 auto; }
+.pia-badge-capt { background: var(--accent); color: var(--accent-ink); }
+.pia-badge-vice { background: rgba(255,197,61,.2); color: var(--gold); }
+.pia-badge-bench { background: var(--surface-3); color: var(--text-3); }
+.pill-sm { font-size: 11px; padding: 3px 9px; }

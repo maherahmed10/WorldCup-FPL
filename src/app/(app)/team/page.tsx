@@ -27,6 +27,7 @@ import { TeamNamePrompt } from "./TeamNamePrompt";
 import { MiniStore } from "@/components/MiniStore";
 import { RankBoard } from "@/components/RankBoard";
 import { getGlobalLeaderboard } from "@/lib/leaderboard";
+import { PlayersInAction, type PlayerInAction } from "@/components/PlayersInAction";
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -120,6 +121,71 @@ export default async function TeamPage() {
   // Global rank board (added at the top — see leaderboard.ts).
   const leaderboard = await getGlobalLeaderboard({ userId: user.id, gameweekId: gameweek!.id });
 
+  // "Your Players in Action Today" — fixtures within the current UTC day + 6h buffer for
+  // late North-American kickoffs that cross midnight UTC.
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayWindowEnd = new Date(todayStart.getTime() + 30 * 60 * 60 * 1000); // +30h
+
+  const [todayFixtures, playerTeamRows] = await Promise.all([
+    db.fixture.findMany({
+      where: {
+        kickoff: { gte: todayStart, lt: todayWindowEnd },
+        status: { in: ["SCHEDULED", "LIVE", "FINISHED"] },
+      },
+      select: {
+        id: true,
+        kickoff: true,
+        status: true,
+        homeScore: true,
+        awayScore: true,
+        homeTeamId: true,
+        awayTeamId: true,
+        homeTeam: { select: { country: true } },
+        awayTeam: { select: { country: true } },
+      },
+    }),
+    db.player.findMany({
+      where: { id: { in: squad.players.map((p) => p.id) } },
+      select: { id: true, teamId: true },
+    }),
+  ]);
+
+  const teamToFixture = new Map<string, typeof todayFixtures[0]>();
+  for (const f of todayFixtures) {
+    teamToFixture.set(f.homeTeamId, f);
+    teamToFixture.set(f.awayTeamId, f);
+  }
+  const playerTeamMap = new Map(playerTeamRows.map((r) => [r.id, r.teamId]));
+
+  const playersInAction: PlayerInAction[] = squad.players
+    .filter((p) => {
+      const tid = playerTeamMap.get(p.id);
+      return tid && teamToFixture.has(tid);
+    })
+    .map((p) => {
+      const tid = playerTeamMap.get(p.id)!;
+      const f = teamToFixture.get(tid)!;
+      return {
+        id: p.id,
+        name: p.name,
+        position: p.position,
+        country: p.country,
+        isCapt: p.id === captainId,
+        isVice: p.id === viceId,
+        isStarting: p.isStarting,
+        fixture: {
+          id: f.id,
+          kickoffIso: f.kickoff.toISOString(),
+          status: f.status as "SCHEDULED" | "LIVE" | "FINISHED",
+          homeScore: f.homeScore,
+          awayScore: f.awayScore,
+          home: f.homeTeam.country,
+          away: f.awayTeam.country,
+        },
+      };
+    });
+
   return (
     <div className="screen">
       <div className="screen-head head-row">
@@ -136,6 +202,12 @@ export default async function TeamPage() {
       <div style={{ marginBottom: 14 }}>
         <RankBoard data={leaderboard} />
       </div>
+
+      {playersInAction.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <PlayersInAction players={playersInAction} />
+        </div>
+      )}
 
       <div className="grid-stats">
         <StatCard label="Total Points" value={seasonTotal} sub="Season" icon="bolt" />
