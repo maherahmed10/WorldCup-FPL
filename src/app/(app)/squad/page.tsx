@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import { getUpcomingDeadlineGameweek, getSquadForEdit, getPickForEdit } from "@/lib/squad-data";
 import { getMaxPerCountry, type PerkLike } from "@/lib/store";
 import { SquadPicker, type PickerPlayer } from "./SquadPicker";
-import { BankConvertCard } from "./BankConvertCard";
 
 export default async function SquadPage() {
   const supabase = await createClient();
@@ -56,13 +55,7 @@ export default async function SquadPage() {
 
   return (
     <>
-      {!isGroupStage && appUser && (
-        <BankConvertCard
-          bettingBalance={appUser.bettingBalance}
-          currentBonus={budgetBonus}
-        />
-      )}
-      <SquadPicker
+<SquadPicker
         pool={pool}
         gameweekLabel={gameweek?.label ?? ""}
         initialStarterIds={existing?.players.filter((p) => p.isStarting).map((p) => p.id) ?? []}
