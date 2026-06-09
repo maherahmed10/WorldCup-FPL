@@ -150,7 +150,11 @@ export default async function TeamPage() {
           </div>
           <div>
             <h4>{deadlineGw?.label ?? gameweek?.label} deadline</h4>
-            <p>Set your captain and squad before kickoff.</p>
+            <p>
+              {deadlineGw && gameweek && deadlineGw.id !== gameweek.id
+                ? `Editing prepares your ${deadlineGw.label} team — set your XI, captain & vice before kickoff.`
+                : "Set your captain and squad before kickoff."}
+            </p>
           </div>
         </div>
         <Countdown to={deadlineMs} />

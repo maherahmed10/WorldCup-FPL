@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { getCurrentGameweek } from "@/lib/squad-data";
+import { getCurrentGameweek, getUpcomingDeadlineGameweek, getMostRecentSquad } from "@/lib/squad-data";
 import {
   validateSquad,
   formationName,
@@ -27,12 +27,28 @@ export async function saveSquad(payload: SavePayload) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const gameweek = await getCurrentGameweek();
+  // Save targets the NEXT-deadline gameweek (the editable one), so editing after
+  // MD1's deadline writes the MD2 row and leaves the locked MD1 untouched.
+  const gameweek = await getUpcomingDeadlineGameweek();
   if (!gameweek) return { ok: false, error: "No active gameweek." };
 
   const allIds = [...payload.starterIds, ...payload.benchIds];
   if (new Set(allIds).size !== allIds.length) {
     return { ok: false, error: "Duplicate player in squad." };
+  }
+
+  // The 15 are LOCKED whenever a prior squad exists (only the first-ever pick is
+  // unlocked). When locked, the incoming 15 MUST equal the carried-forward 15 —
+  // re-derived server-side, never trusting the client.
+  const prior = await getMostRecentSquad(user.id);
+  const lockRoster = prior != null;
+  if (lockRoster) {
+    const priorIds = new Set(prior!.squad.players.map((p) => p.id));
+    const incoming = new Set(allIds);
+    const same = priorIds.size === incoming.size && [...incoming].every((id) => priorIds.has(id));
+    if (!same) {
+      return { ok: false, error: "Your 15 are locked — change players in Transfers, not here." };
+    }
   }
 
   // Load the picked players from the DB to validate against real prices/countries.
@@ -51,9 +67,14 @@ export async function saveSquad(payload: SavePayload) {
     country: p.team.country,
   }));
 
-  const result = validateSquad(asRules, { budgetBonus: dbUser?.squadBudgetBonus ?? 0 });
-  if (!result.valid) {
-    return { ok: false, error: result.errors[0]?.message ?? "Invalid squad." };
+  // Budget / quota / max-per-country only matter when PICKING the 15 (first pick).
+  // A locked edit inherits an already-validated 15 — skip those checks (prices or
+  // the budget bonus may have drifted) and only validate the XI/captain/vice below.
+  if (!lockRoster) {
+    const result = validateSquad(asRules, { budgetBonus: dbUser?.squadBudgetBonus ?? 0 });
+    if (!result.valid) {
+      return { ok: false, error: result.errors[0]?.message ?? "Invalid squad." };
+    }
   }
 
   // Starting XI must be 11 + a 4-man bench, in an allowable named formation.
@@ -114,6 +135,7 @@ export async function saveSquad(payload: SavePayload) {
   });
 
   revalidatePath("/team");
+  revalidatePath("/squad");
   return { ok: true };
 }
 

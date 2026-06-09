@@ -62,6 +62,7 @@ export function SquadPicker({
   budgetBonus = 0,
   ownedPerks = [],
   isGroupStage = true,
+  lockRoster = false,
   initialFavouriteIds = [],
 }: {
   pool: PickerPlayer[];
@@ -75,6 +76,9 @@ export function SquadPicker({
   budgetBonus?: number;
   ownedPerks?: PerkLike[];
   isGroupStage?: boolean;
+  // When true the 15 are LOCKED — only XI reorder + captain/vice are editable
+  // (the 15 change only via /transfers). False only on the first-ever pick.
+  lockRoster?: boolean;
   initialFavouriteIds?: string[];
 }) {
   const router = useRouter();
@@ -285,9 +289,11 @@ export function SquadPicker({
     <div className="screen">
       <div className="screen-head head-row">
         <div>
-          <h1>Pick Your Team</h1>
+          <h1>{lockRoster ? "Edit Your Team" : "Pick Your Team"}</h1>
           <div className="sub">
-            Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap.
+            {lockRoster
+              ? "Your 15 are locked — set your starting XI, captain & vice. Change players in Transfers."
+              : "Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap."}
             {gameweekLabel ? ` · ${gameweekLabel}` : ""}
           </div>
         </div>
@@ -375,7 +381,7 @@ export function SquadPicker({
               rows={pitchRows}
               captainId={captainId}
               viceId={viceId}
-              onEmpty={(pos) => setPickerFor({ pos, starter: true })}
+              onEmpty={(pos) => { if (!lockRoster) setPickerFor({ pos, starter: true }); }}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
               draggedRef={draggedRef}
@@ -392,7 +398,7 @@ export function SquadPicker({
               viceId={viceId}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
-              onAdd={(pos) => setPickerFor({ pos, starter: false })}
+              onAdd={(pos) => { if (!lockRoster) setPickerFor({ pos, starter: false }); }}
               byPos={byPos}
               draggedRef={draggedRef}
               draggingId={draggingId}
@@ -448,6 +454,7 @@ export function SquadPicker({
             player={p}
             isCaptain={captainId === p.id}
             isVice={viceId === p.id}
+            canRemove={!lockRoster}
             onViewProfile={() => { setProfileId(p.id); close(); }}
             onCaptain={() => { setCaptainId(p.id); if (viceId === p.id) setViceId(null); close(); }}
             onVice={() => { setViceId(p.id); if (captainId === p.id) setCaptainId(null); close(); }}
@@ -472,6 +479,7 @@ function PlayerActionMenu({
   player,
   isCaptain,
   isVice,
+  canRemove,
   onViewProfile,
   onCaptain,
   onVice,
@@ -482,6 +490,7 @@ function PlayerActionMenu({
   player: SquadEntry;
   isCaptain: boolean;
   isVice: boolean;
+  canRemove: boolean;
   onViewProfile: () => void;
   onCaptain: () => void;
   onVice: () => void;
@@ -515,7 +524,9 @@ function PlayerActionMenu({
           <Item icon="star" label={isCaptain ? "Captain (×2) — selected" : "Make Captain (×2)"} onClick={onCaptain} />
           <Item icon="user" label={isVice ? "Vice-captain — selected" : "Make Vice-captain"} onClick={onVice} />
           <Item icon="swap" label="Substitute" onClick={onSubstitute} />
-          <Item icon="swap" label="Remove from squad" onClick={onRemove} tone="live" />
+          {canRemove && (
+            <Item icon="swap" label="Remove from squad" onClick={onRemove} tone="live" />
+          )}
         </div>
         <div style={{ padding: "0 18px 18px" }}>
           <button className="btn btn-ghost btn-block" onClick={onClose}>Close</button>
