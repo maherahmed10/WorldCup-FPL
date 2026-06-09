@@ -98,6 +98,12 @@ export default async function TeamPage() {
   const captainId = pick?.captainId ?? squad.captainId;
   const viceId = pick?.viceId ?? null;
 
+  // Injury warnings — captain first, then other starters.
+  const captainPlayer = squad.players.find((p) => p.id === captainId);
+  const injuredStarters = squad.players.filter(
+    (p) => p.injured && p.isStarting && p.id !== captainId,
+  );
+
   // Real points from settled PlayerMatchStat (0 until matches are played + settled).
   const gwPoints = await getGameweekPlayerPoints(
     squad.players.map((p) => p.id),
@@ -215,6 +221,35 @@ export default async function TeamPage() {
         <StatCard label="Squad" value={`${squad.players.length}/15`} sub="Players picked" tone="gold" icon="team" />
         <StatCard label="Squad Value" value={fmtPrice(squadValue)} sub="At selection" tone="blue" icon="coins" />
       </div>
+
+      {captainPlayer?.injured && (
+        <div className="banner live" style={{ marginTop: 14 }}>
+          <div className="banner-l">
+            <div className="banner-ico">
+              <Icon name="info" size={20} style={{ color: "var(--live)" }} />
+            </div>
+            <div>
+              <h4>Your captain is injured</h4>
+              <p>{captainPlayer.name} is listed as injured — consider changing your captain before the deadline.</p>
+            </div>
+          </div>
+          <Link className="btn btn-ghost btn-sm" href="/squad">Change</Link>
+        </div>
+      )}
+
+      {injuredStarters.length > 0 && (
+        <div className="banner warn" style={{ marginTop: 14 }}>
+          <div className="banner-l">
+            <div className="banner-ico">
+              <Icon name="info" size={20} style={{ color: "var(--gold)" }} />
+            </div>
+            <div>
+              <h4>{injuredStarters.length === 1 ? "1 starter" : `${injuredStarters.length} starters`} injured</h4>
+              <p>{injuredStarters.map((p) => p.name).join(", ")} {injuredStarters.length === 1 ? "is" : "are"} listed as injured.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="banner warn" style={{ marginTop: 14 }}>
         <div className="banner-l">
