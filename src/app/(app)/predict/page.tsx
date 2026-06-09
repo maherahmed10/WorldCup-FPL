@@ -8,7 +8,8 @@ import { getCurrentUser } from "@/lib/current-user";
 import {
   matchMarkets,
   scorerMultiplier,
-  PLAYER_PROP_MULTIPLIER,
+  assistMultiplier,
+  cardMultiplier,
   type BetLike,
   type MarketType,
 } from "@/lib/betting";
@@ -115,14 +116,16 @@ export default async function PredictPage() {
   const defenders = teamIds.length
     ? await db.player.findMany({
         where: { teamId: { in: teamIds }, position: { in: ["DEF", "MID"] } },
-        select: { id: true, name: true, teamId: true },
+        select: { id: true, name: true, teamId: true, position: true, price: true },
         orderBy: [{ price: "desc" }, { name: "asc" }],
       })
     : [];
-  const cardsByTeam = new Map<string, Array<{ id: string; name: string }>>();
+  type CardCand = { id: string; name: string; position: "DEF" | "MID"; price: number };
+  const cardsByTeam = new Map<string, CardCand[]>();
   for (const d of defenders) {
     const list = cardsByTeam.get(d.teamId) ?? [];
-    if (list.length < CARDS_PER_TEAM) list.push({ id: d.id, name: d.name });
+    if (list.length < CARDS_PER_TEAM)
+      list.push({ id: d.id, name: d.name, position: d.position as "DEF" | "MID", price: d.price });
     cardsByTeam.set(d.teamId, list);
   }
 
@@ -149,18 +152,18 @@ export default async function PredictPage() {
           multiplier: judgementScorerOdds(s.name) ?? scorerMultiplier(s.position, s.price),
         })),
       });
-      // To Assist — same creative pool, fixed multiplier (our own market, §7).
+      // To Assist — same creative pool, priced per-player by position + price.
       groups.push({
         marketType: "PLAYER_ASSIST",
         label: MARKET_LABEL.PLAYER_ASSIST,
         options: scorers.map((s) => ({
           name: s.name,
           selection: `assist:${s.id}`,
-          multiplier: PLAYER_PROP_MULTIPLIER.PLAYER_ASSIST,
+          multiplier: assistMultiplier(s.position, s.price),
         })),
       });
     }
-    // To Be Carded — defenders / defensive mids, fixed multiplier.
+    // To Be Carded — defenders / defensive mids, priced per-player by position + price.
     const cardCandidates = [
       ...(cardsByTeam.get(f.homeTeamId) ?? []),
       ...(cardsByTeam.get(f.awayTeamId) ?? []),
@@ -172,7 +175,7 @@ export default async function PredictPage() {
         options: cardCandidates.map((c) => ({
           name: c.name,
           selection: `card:${c.id}`,
-          multiplier: PLAYER_PROP_MULTIPLIER.PLAYER_CARD,
+          multiplier: cardMultiplier(c.position, c.price),
         })),
       });
     }

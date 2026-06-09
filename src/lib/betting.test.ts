@@ -9,6 +9,8 @@ import {
   canPlaceBet,
   matchMarkets,
   scorerMultiplier,
+  assistMultiplier,
+  cardMultiplier,
   settleBetSelection,
   parsePlayerProp,
   settlePlayerProp,
@@ -149,6 +151,27 @@ test("scorerMultiplier: clamped to [1.6, 8.0] and 2dp", () => {
   const lo = scorerMultiplier("FWD", 150); // £15m striker → should hit ~floor
   assert.ok(hi <= 8.0 && lo >= 1.6);
   assert.equal(Math.round(hi * 100) / 100, hi); // already 2dp
+});
+
+test("assistMultiplier: creators (MID) pay less than defenders; varies by player", () => {
+  const p = 70;
+  assert.ok(assistMultiplier("MID", p) < assistMultiplier("FWD", p));
+  assert.ok(assistMultiplier("FWD", p) < assistMultiplier("DEF", p));
+  // not flat: a £10m mid differs from a £4.5m mid
+  assert.notEqual(assistMultiplier("MID", 100), assistMultiplier("MID", 45));
+  // clamped + 2dp
+  const lo = assistMultiplier("MID", 130);
+  assert.ok(lo >= 2.0 && assistMultiplier("GK", 40) <= 9.0);
+});
+
+test("cardMultiplier: defenders pay least; forwards/keepers most; varies", () => {
+  const p = 60;
+  assert.ok(cardMultiplier("DEF", p) < cardMultiplier("MID", p));
+  assert.ok(cardMultiplier("MID", p) < cardMultiplier("FWD", p));
+  // pricier player booked slightly less → higher odds
+  assert.ok(cardMultiplier("DEF", 110) > cardMultiplier("DEF", 45));
+  // clamped [2.3, 7.0]
+  assert.ok(cardMultiplier("DEF", 45) >= 2.3 && cardMultiplier("GK", 130) <= 7.0);
 });
 
 // ── Money economy (2.1) ────────────────────────────────────────────────────

@@ -75,6 +75,44 @@ export function scorerMultiplier(
   return Math.round(clamped * 100) / 100;
 }
 
+/**
+ * Anytime-assist multiplier (our own market — the API only prices assists for a
+ * couple of players per fixture, so we price every candidate ourselves). Creative
+ * players (mids/wingers) assist most so pay least; forwards moderate; defenders
+ * least likely. Price-adjusted like the scorer market. Clamped to [2.0, 9.0].
+ */
+export function assistMultiplier(
+  position: "GK" | "DEF" | "MID" | "FWD",
+  price: number,
+): number {
+  // Mids create most, then forwards, then defenders/keepers.
+  const base: Record<string, number> = { MID: 3.4, FWD: 4.2, DEF: 6.5, GK: 9.0 };
+  const priceM = price / 10;
+  const adj = (priceM - 5) * 0.14; // pricier = more involved = shorter odds
+  const raw = (base[position] ?? 5.5) - adj;
+  const clamped = Math.min(9.0, Math.max(2.0, raw));
+  return Math.round(clamped * 100) / 100;
+}
+
+/**
+ * To-be-carded multiplier (our own market — the API has no per-player card
+ * market, only team-level). Defenders & defensive mids see the most cards so pay
+ * least; forwards and keepers are booked least. Cheaper/rotation players also
+ * tend to foul more, so LOWER price shortens the odds slightly. Clamped [2.3, 7.0].
+ */
+export function cardMultiplier(
+  position: "GK" | "DEF" | "MID" | "FWD",
+  price: number,
+): number {
+  const base: Record<string, number> = { DEF: 2.8, MID: 3.2, FWD: 4.6, GK: 6.5 };
+  const priceM = price / 10;
+  // Pricier (star) players are booked a touch less — nudge odds UP with price.
+  const adj = (priceM - 5) * 0.06;
+  const raw = (base[position] ?? 3.5) + adj;
+  const clamped = Math.min(7.0, Math.max(2.3, raw));
+  return Math.round(clamped * 100) / 100;
+}
+
 /** A single placed/settled bet, reduced to just what the math needs. */
 export interface BetLike {
   stake: number;
