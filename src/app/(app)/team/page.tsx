@@ -3,6 +3,7 @@
 // Shows the empty "pick your team" state if they haven't built one yet.
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { fmtPrice } from "@/lib/format";
 import { db } from "@/lib/db";
 import { Icon } from "@/components/Icon";
 import { StatCard } from "@/components/StatCard";
@@ -128,7 +129,7 @@ export default async function TeamPage() {
         </div>
         <Link className="btn btn-ghost" href="/squad">
           <Icon name="settings" size={16} />
-          Edit Squad
+          {isGroupStage ? "Formation & Captain" : "Edit Squad"}
         </Link>
       </div>
 
@@ -140,7 +141,7 @@ export default async function TeamPage() {
         <StatCard label="Total Points" value={seasonTotal} sub="Season" icon="bolt" />
         <StatCard label="This Round" value={`+${gwTotal}`} sub={gameweek?.label ?? ""} tone="accent" icon="arrowup" />
         <StatCard label="Squad" value={`${squad.players.length}/15`} sub="Players picked" tone="gold" icon="team" />
-        <StatCard label="Squad Value" value={`£${(squadValue / 10).toFixed(1)}m`} sub="At selection" tone="blue" icon="coins" />
+        <StatCard label="Squad Value" value={fmtPrice(squadValue)} sub="At selection" tone="blue" icon="coins" />
       </div>
 
       <div className="banner warn" style={{ marginTop: 14 }}>

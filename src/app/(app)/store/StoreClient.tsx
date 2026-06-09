@@ -4,11 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { STORE_ITEMS } from "@/lib/store";
 import { purchaseItem } from "./actions";
-
-function fmtCost(n: number) {
-  const m = n / 1_000_000;
-  return `£${m % 1 === 0 ? m : m.toFixed(1)}M`;
-}
+import { fmtMoney } from "@/lib/format";
 
 export interface OwnedPerk {
   id: string;
@@ -78,7 +74,7 @@ export function StoreClient({
         >
           <span className="font-bold" style={{ color: "var(--accent)" }}>£</span>
           <div className="text-right">
-            <div className="num text-lg font-extrabold">{fmtCost(balance)}</div>
+            <div className="num text-lg font-extrabold">{fmtMoney(balance)}</div>
             <div className="text-[10px] font-semibold" style={{ color: "var(--text-3)" }}>
               betting bank
             </div>
@@ -112,7 +108,7 @@ export function StoreClient({
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="num font-extrabold" style={{ color: "var(--accent)" }}>
-                    {fmtCost(item.cost)}
+                    {fmtMoney(item.cost)}
                   </div>
                   {activeCount > 0 && (
                     <div className="mt-0.5 text-[11px] font-bold" style={{ color: "var(--gold)" }}>
@@ -145,7 +141,7 @@ export function StoreClient({
                   : benchBoostLocked
                   ? "Locked"
                   : canBuy
-                  ? `Buy — ${fmtCost(item.cost)}`
+                  ? `Buy — ${fmtMoney(item.cost)}`
                   : "Insufficient funds"}
               </button>
             </div>

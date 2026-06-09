@@ -65,8 +65,18 @@ function RankTile({
         </span>
       </div>
       <div className="rt-bar">
+        <div className="rt-bar-endpoints">
+          <span className="rt-ep">Last</span>
+          <span className="rt-ep">1st</span>
+        </div>
         <div className="rt-bar-track">
           <i style={{ width: (ranked ? fillFromRank(rank, totalManagers) : 0) + "%" }} />
+          {ranked && (
+            <span
+              className="rt-bar-dot"
+              style={{ left: fillFromRank(rank, totalManagers) + "%" }}
+            />
+          )}
         </div>
         <div className="rt-bar-label">
           <span className="rt-pct">{ranked ? `Top ${pctTop(rank, totalManagers)}%` : "—"}</span>

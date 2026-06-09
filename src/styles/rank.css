@@ -50,9 +50,15 @@
 .move.down .tri { border-left:4px solid transparent; border-right:4px solid transparent; border-top:6px solid currentColor; }
 .move.flat .tri { width:7px; height:2px; background:currentColor; border-radius:2px; }
 .rt-bar { margin-top:13px; }
-.rt-bar-track { height:5px; border-radius:999px; background:var(--surface-3); overflow:hidden; }
-.rt-bar-track i { display:block; height:100%; border-radius:999px;
+.rt-bar-endpoints { display:flex; justify-content:space-between; margin-bottom:4px; }
+.rt-ep { font-size:10px; font-weight:700; color:var(--text-3); }
+.rt-bar-track { position:relative; height:5px; border-radius:999px; background:var(--surface-3); overflow:visible; }
+.rt-bar-track i { display:block; height:100%; border-radius:999px; overflow:hidden;
   background:linear-gradient(90deg, var(--cc, var(--accent)), color-mix(in srgb, var(--cc, var(--accent)) 55%, #fff)); }
+.rt-bar-dot { position:absolute; top:50%; width:10px; height:10px; border-radius:50%;
+  background:var(--cc, var(--accent)); border:2px solid var(--surface);
+  transform:translate(-50%, -50%); pointer-events:none; z-index:1;
+  box-shadow:0 0 0 2px var(--cc, var(--accent)); }
 .rt-bar-label { display:flex; align-items:center; justify-content:space-between; margin-top:7px; }
 .rt-pct { font-size:12px; font-weight:800; color:var(--cc, var(--accent)); white-space:nowrap; }
 .rt-of { font-size:11px; color:var(--text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }

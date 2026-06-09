@@ -6,6 +6,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { allocateBankToSquad } from "./actions";
+import { fmtMoney, fmtPrice } from "@/lib/format";
 
 const STEP = 100_000; // minimum conversion unit = £100k = 0.1M budget
 
@@ -33,7 +34,7 @@ export function BankConvertCard({
       const res = await allocateBankToSquad(amount);
       if (res.ok) {
         router.refresh();
-        setSuccess(`+£${addedM}M added to your squad budget.`);
+        setSuccess(`+${fmtMoney(amount)} added to your squad budget.`);
       } else {
         setError(res.error);
       }
@@ -59,14 +60,14 @@ export function BankConvertCard({
       <p className="mb-3 text-sm" style={{ color: "var(--text-2)" }}>
         Convert your betting bank into extra squad budget. £1M betting = £1M squad budget.
         {currentBonus > 0 && (
-          <span style={{ color: "var(--accent)" }}> You&apos;ve already added £{(currentBonus / 10).toFixed(1)}M.</span>
+          <span style={{ color: "var(--accent)" }}> You&apos;ve already added {fmtPrice(currentBonus)}.</span>
         )}
       </p>
 
       <div className="mb-3">
         <div className="mb-1 flex items-center justify-between text-xs font-bold" style={{ color: "var(--text-3)" }}>
           <span>Convert amount</span>
-          <span style={{ color: "var(--text-2)" }}>Bank: £{bettingBalance.toLocaleString("en-GB")}</span>
+          <span style={{ color: "var(--text-2)" }}>Bank: {fmtMoney(bettingBalance)}</span>
         </div>
         <input
           type="range"
@@ -79,8 +80,8 @@ export function BankConvertCard({
         />
         <div className="mt-1 flex items-center justify-between text-xs" style={{ color: "var(--text-2)" }}>
           <span>£100k</span>
-          <span className="num font-bold text-sm">£{amount.toLocaleString("en-GB")}</span>
-          <span>£{maxConvert.toLocaleString("en-GB")}</span>
+          <span className="num font-bold text-sm">{fmtMoney(amount)}</span>
+          <span>{fmtMoney(maxConvert)}</span>
         </div>
       </div>
 
@@ -89,7 +90,7 @@ export function BankConvertCard({
         style={{ background: "var(--surface-2)" }}
       >
         <span className="text-sm" style={{ color: "var(--text-2)" }}>Squad budget boost</span>
-        <span className="num font-extrabold" style={{ color: "var(--gold)" }}>+£{addedM}M → total £{totalBonusM}M bonus</span>
+        <span className="num font-extrabold" style={{ color: "var(--gold)" }}>+{fmtMoney(amount)} → total {fmtPrice(currentBonus + Math.floor(amount / STEP))} bonus</span>
       </div>
 
       {error && (
@@ -109,10 +110,10 @@ export function BankConvertCard({
         className="w-full rounded-xl py-2.5 text-sm font-extrabold transition-opacity disabled:opacity-50"
         style={{ background: "var(--gold)", color: "#000" }}
       >
-        {pending ? "Converting…" : `Add £${addedM}M to Squad Budget`}
+        {pending ? "Converting…" : `Add ${fmtMoney(amount)} to Squad Budget`}
       </button>
       <p className="mt-2 text-center text-xs" style={{ color: "var(--text-3)" }}>
-        Your remaining bank (£{(bettingBalance - amount).toLocaleString("en-GB")}) stays for betting.
+        Your remaining bank ({fmtMoney(bettingBalance - amount)}) stays for betting.
       </p>
     </div>
   );

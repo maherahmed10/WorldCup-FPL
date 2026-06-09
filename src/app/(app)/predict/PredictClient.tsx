@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { potentialReturn, MIN_STAKE, type MarketType } from "@/lib/betting";
+import { fmtMoney } from "@/lib/format";
 import { Flag } from "@/components/Flag";
 import { placeParlay, placeSingles } from "./actions";
 import { H2HClient, type H2HChallengeView } from "./H2HClient";
@@ -182,9 +183,8 @@ export function PredictClient({
           className="flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2"
           style={{ background: "var(--surface)", borderColor: "var(--line-2)" }}
         >
-          <span style={{ color: "var(--accent)" }}>£</span>
           <div className="text-right">
-            <div className="num text-lg font-extrabold">{balance.toLocaleString("en-GB")}</div>
+            <div className="num text-lg font-extrabold">{fmtMoney(balance)}</div>
             <div className="text-[10px] font-semibold" style={{ color: "var(--text-3)" }}>
               betting bank
             </div>
@@ -586,7 +586,7 @@ function BetSlip({
         if (res.ok) {
           router.refresh();
           clear();
-          onPlaced(`Challenge sent to ${opp?.name ?? "friend"} · £${stake.toLocaleString("en-GB")} locked`);
+          onPlaced(`Challenge sent to ${opp?.name ?? "friend"} · ${fmtMoney(stake)} locked`);
         } else {
           setError(res.error);
         }
@@ -610,10 +610,10 @@ function BetSlip({
       if (res.ok) {
         onPlaced(
           asParlay
-            ? `Parlay placed · £${stake.toLocaleString("en-GB")}`
+            ? `Parlay placed · ${fmtMoney(stake)}`
             : legs.length > 1
-              ? `${legs.length} singles placed · £${totalStake.toLocaleString("en-GB")}`
-              : `Bet placed · £${stake.toLocaleString("en-GB")}`,
+              ? `${legs.length} singles placed · ${fmtMoney(totalStake)}`
+              : `Bet placed · ${fmtMoney(stake)}`,
         );
       } else {
         setError(res.error);
@@ -751,7 +751,7 @@ function BetSlip({
                 : "Potential return"}
           </span>
           <span className="num text-lg font-extrabold" style={{ color: "var(--accent)" }}>
-            £{ret.toLocaleString("en-GB")}
+            {fmtMoney(ret)}
           </span>
         </div>
         {needsMoreForParlay ? (
@@ -765,7 +765,7 @@ function BetSlip({
         ) : (
           (error || tooHigh) && (
             <div className="mb-2 text-xs font-semibold" style={{ color: "var(--live)" }}>
-              {error ?? (stake < minStake ? `Minimum stake is £${minStake.toLocaleString("en-GB")}.` : "Total stake exceeds your balance.")}
+              {error ?? (stake < minStake ? `Minimum stake is ${fmtMoney(minStake)}.` : "Total stake exceeds your balance.")}
             </div>
           )
         )}
@@ -784,12 +784,12 @@ function BetSlip({
               : h2hBlocked
                 ? "One selection only"
                 : effMode === "h2h"
-                  ? `⚔ Challenge · £${stake.toLocaleString("en-GB")}`
+                  ? `⚔ Challenge · ${fmtMoney(stake)}`
                   : effMode === "singles"
                     ? legs.length > 1
-                      ? `Place ${legs.length} singles · £${totalStake.toLocaleString("en-GB")}`
-                      : `Place bet · £${stake.toLocaleString("en-GB")}`
-                    : `Place parlay · £${stake.toLocaleString("en-GB")}`}
+                      ? `Place ${legs.length} singles · ${fmtMoney(totalStake)}`
+                      : `Place bet · ${fmtMoney(stake)}`
+                    : `Place parlay · ${fmtMoney(stake)}`}
         </button>
       </div>
     </div>
@@ -846,7 +846,7 @@ function ParlayRow({ p }: { p: ParlayView }) {
           <span className="num" style={{ color: "var(--text-3)" }}>@{p.multiplier.toFixed(2)}</span>
         </span>
         <span className="num text-[13px] font-bold" style={{ color: accent }}>
-          {p.status === "OPEN" ? `Open · £${potential.toLocaleString("en-GB")}` : p.status === "WON" ? `+£${(p.payout ?? 0).toLocaleString("en-GB")}` : p.status === "VOID" ? "Void" : "Lost"}
+          {p.status === "OPEN" ? `Open · ${fmtMoney(potential)}` : p.status === "WON" ? `+${fmtMoney(p.payout ?? 0)}` : p.status === "VOID" ? "Void" : "Lost"}
         </span>
       </div>
       <div className="px-3 py-2" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -863,7 +863,7 @@ function ParlayRow({ p }: { p: ParlayView }) {
         })}
       </div>
       <div className="border-t px-3 py-1.5 text-[11px]" style={{ borderColor: "var(--line)", color: "var(--text-3)" }}>
-        Stake £{p.stake.toLocaleString("en-GB")} · all legs must win
+        Stake {fmtMoney(p.stake)} · all legs must win
       </div>
     </div>
   );
@@ -886,10 +886,10 @@ function BetRow({ b }: { b: BetView }) {
       </div>
       <div className="text-right shrink-0">
         <div className="num text-sm font-bold">
-          £{b.stake.toLocaleString("en-GB")} <span style={{ color: "var(--text-3)" }}>@{b.multiplier.toFixed(2)}</span>
+          {fmtMoney(b.stake)} <span style={{ color: "var(--text-3)" }}>@{b.multiplier.toFixed(2)}</span>
         </div>
         <div className="num text-[13px] font-bold" style={{ color: accent }}>
-          {b.status === "OPEN" ? "Open" : b.status === "WON" ? `+£${(b.payout ?? 0).toLocaleString("en-GB")}` : b.status === "VOID" ? "Void" : "Lost"}
+          {b.status === "OPEN" ? "Open" : b.status === "WON" ? `+${fmtMoney(b.payout ?? 0)}` : b.status === "VOID" ? "Void" : "Lost"}
         </div>
       </div>
     </div>

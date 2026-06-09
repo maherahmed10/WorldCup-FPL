@@ -9,6 +9,7 @@ import { Flag } from "@/components/Flag";
 import { Jersey } from "@/components/Jersey";
 import { Spark } from "@/components/Spark";
 import { FDR_LABEL, type PlayerProfileView } from "@/lib/player-profile";
+import { fmtMoney } from "@/lib/format";
 
 type Tab = "stats" | "matches" | "fixtures";
 const POS_RING = { GK: "GK", DEF: "DEF", MID: "MID", FWD: "FWD" } as const;
@@ -104,7 +105,7 @@ export function PlayerProfileModal({
                     <span>{data.nationality ?? data.country.replace(/-/g, " ")}</span>
                   </div>
                   <div className="pp-price">
-                    <span className="pp-price-v num">£{data.price.toFixed(1)}m</span>
+                    <span className="pp-price-v num">{fmtMoney(data.price * 1_000_000)}</span>
                     <span className="pp-price-l">GAFFER price</span>
                   </div>
                 </div>

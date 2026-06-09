@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { STORE_ITEMS, type PerkLike } from "@/lib/store";
 import { purchaseItem } from "@/app/(app)/store/actions";
+import { fmtMoney } from "@/lib/format";
 
 const PERK_ICON: Record<string, string> = {
   extra_captain: "⚡",
@@ -58,7 +59,7 @@ export function MiniStore({
         <div className="sum-title">Store</div>
         <div className="flex items-center gap-1">
           <span className="num text-sm font-extrabold" style={{ color: "var(--accent)" }}>
-            £{balance.toLocaleString("en-GB")}
+            {fmtMoney(balance)}
           </span>
           <span className="text-[10px]" style={{ color: "var(--text-3)" }}>bank</span>
         </div>
@@ -106,7 +107,7 @@ export function MiniStore({
                   )}
                 </div>
                 <div className="text-[10px]" style={{ color: "var(--text-3)" }}>
-                  {locked ? "After group stage" : `£${item.cost.toLocaleString("en-GB")}`}
+                  {locked ? "After group stage" : fmtMoney(item.cost)}
                 </div>
               </div>
               <button

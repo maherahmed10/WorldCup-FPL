@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { fmtPrice } from "@/lib/format";
 
 function GafferLogo({ size = 20 }: { size?: number }) {
   return (
@@ -50,7 +51,7 @@ export function AppShell({
   const tab = activeTab(pathname);
   const initial = (user?.name ?? "G").charAt(0).toUpperCase();
 
-  const budgetLabel = `£${(budgetRemaining / 10).toFixed(1)}m`;
+  const budgetLabel = fmtPrice(budgetRemaining);
   const budgetPct = Math.max(0, Math.min(100, (budgetRemaining / 1000) * 100));
   const budgetTone =
     budgetRemaining <= 0 ? "var(--live)" :

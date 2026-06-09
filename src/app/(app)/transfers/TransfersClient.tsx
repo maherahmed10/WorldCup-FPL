@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { TRANSFERS_PER_WINDOW } from "@/lib/squad-rules";
+import { fmtPrice } from "@/lib/format";
 import { saveTransfers } from "./actions";
 
 export interface TransferPlayer {
@@ -197,7 +198,7 @@ export function TransfersClient({
                       <div className="min-w-0">
                         <div className="truncate text-sm font-bold">{p.name}</div>
                         <div className="text-xs" style={{ color: "var(--text-3)" }}>
-                          {p.country} · £{(p.price / 10).toFixed(1)}m
+                          {p.country} · {fmtPrice(p.price)}
                         </div>
                       </div>
                       {isNew && (
@@ -279,7 +280,7 @@ export function TransfersClient({
                     </div>
                   </div>
                   <div className="num text-sm font-bold" style={{ color: "var(--accent)" }}>
-                    £{(p.price / 10).toFixed(1)}m
+                    {fmtPrice(p.price)}
                   </div>
                 </button>
               ))

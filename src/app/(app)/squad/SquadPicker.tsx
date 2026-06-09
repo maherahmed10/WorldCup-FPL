@@ -16,6 +16,7 @@ import { BudgetBar } from "@/components/BudgetBar";
 import { MiniStore } from "@/components/MiniStore";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import type { PerkLike } from "@/lib/store";
+import { fmtPrice } from "@/lib/format";
 import {
   SQUAD_QUOTA,
   XI_SIZE,
@@ -536,7 +537,7 @@ function PlayerActionMenu({
               <span className={"pos pos-" + player.position}>{player.position}</span>
               <Flag country={player.country} size={13} round />
               <span className="muted">{player.country.replace(/-/g, " ")}</span>
-              <span className="muted dim">£{(player.price / 10).toFixed(1)}m</span>
+              <span className="muted dim">{fmtPrice(player.price)}</span>
             </div>
           </div>
         </div>
@@ -956,7 +957,7 @@ function PickerModal({
         </div>
         <div className="picker">
           <div className="picker-bar">
-            <span className="pill pill-blue">£{(remaining / 10).toFixed(1)}m to spend</span>
+            <span className="pill pill-blue">{fmtPrice(remaining)} to spend</span>
             <span className="muted" style={{ fontSize: 13 }}>{quotaLeft} {position} slot{quotaLeft === 1 ? "" : "s"} left</span>
           </div>
 
@@ -983,7 +984,7 @@ function PickerModal({
             </div>
             <div className="filter-row">
               <label className="filter-price">
-                Max £{(maxPrice / 10).toFixed(1)}m
+                Max {fmtPrice(maxPrice)}
                 <input
                   type="range"
                   min={40}
