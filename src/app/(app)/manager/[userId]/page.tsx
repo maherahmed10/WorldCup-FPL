@@ -11,7 +11,7 @@ import { StatCard } from "@/components/StatCard";
 import { Pitch } from "@/components/Pitch";
 import {
   getCurrentGameweek,
-  getActiveSquad,
+  getViewSquad,
   toPitchRows,
   teamsViewable,
 } from "@/lib/squad-data";
@@ -90,7 +90,10 @@ export default async function ManagerPage({
   if (!target) notFound();
 
   const teamName = target.teamName ?? target.name;
-  const squad = gameweek ? await getActiveSquad(targetId, gameweek.id) : null;
+  // Carry-forward: show the rival's most recent locked squad (they may not have
+  // re-saved for the current gameweek). Never reveals a future edit.
+  const view = gameweek ? await getViewSquad(targetId, gameweek.startsAt) : null;
+  const squad = view?.squad ?? null;
 
   // ---- no squad picked ----
   if (!squad) {

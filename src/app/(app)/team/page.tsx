@@ -11,7 +11,7 @@ import { TeamPitch } from "@/components/TeamPitch";
 import {
   getCurrentGameweek,
   getUpcomingDeadlineGameweek,
-  getActiveSquad,
+  getViewSquad,
   toPitchRows,
 } from "@/lib/squad-data";
 import {
@@ -51,7 +51,12 @@ export default async function TeamPage() {
 
   const teamName = appUser?.teamName ?? "My Team";
   const gameweek = await getCurrentGameweek();
-  const squad = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
+  // A team carries forward: if there's no squad saved for this exact gameweek,
+  // show the user's most recent one (so a knockout user who picked in MD1 and
+  // never re-saved still has a team). squadGwId tells us where the captain came from.
+  const view = gameweek ? await getViewSquad(user.id, gameweek.startsAt) : null;
+  const squad = view?.squad ?? null;
+  const squadGwId = view?.gameweekId ?? gameweek?.id ?? "";
 
   // ---- empty state: no squad yet ----
   if (!squad) {
@@ -87,10 +92,10 @@ export default async function TeamPage() {
   const rows = toPitchRows(squad.players);
   const bench = squad.players.filter((p) => !p.isStarting);
 
-  // Per-gameweek captain + vice (FPL: changes weekly). Falls back to the squad's
-  // initial captain if no pick has been made for this gameweek yet.
+  // Per-gameweek captain + vice (FPL: changes weekly), keyed to the gameweek the
+  // displayed squad came from (carries forward with the team).
   const pick = await db.gameweekPick.findUnique({
-    where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek!.id } },
+    where: { userId_gameweekId: { userId: user.id, gameweekId: squadGwId } },
     select: { captainId: true, viceId: true },
   });
   const captainId = pick?.captainId ?? squad.captainId;

@@ -97,6 +97,24 @@ export async function getMostRecentSquad(
 }
 
 /**
+ * The squad to DISPLAY for a gameweek (dashboard + rival view). A team carries
+ * forward: if the user didn't save a fresh squad for this gameweek, show their
+ * most recent squad from a PRIOR (or same) gameweek — never a future edit. So a
+ * user who picked in MD1 and never re-saved still has a team in the knockouts.
+ */
+export async function getViewSquad(
+  userId: string,
+  gameweekStartsAt: Date,
+): Promise<{ squad: LoadedSquad; gameweekId: string } | null> {
+  const squad = await db.squad.findFirst({
+    where: { userId, gameweek: { startsAt: { lte: gameweekStartsAt } } },
+    include: SQUAD_INCLUDE,
+    orderBy: { gameweek: { startsAt: "desc" } },
+  });
+  return squad ? { squad: toLoadedSquad(squad), gameweekId: squad.gameweekId } : null;
+}
+
+/**
  * The squad to SEED the picker with for an EDITABLE gameweek. Returns the
  * upcoming-GW squad if a row already exists for it; otherwise the user's
  * most-recent prior squad so the team "carries forward" (FPL model). `seeded`
