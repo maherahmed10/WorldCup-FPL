@@ -114,7 +114,7 @@ export function PredictClient({
   }
 
   return (
-    <div>
+    <div className="screen">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-extrabold">Predictions</h1>
