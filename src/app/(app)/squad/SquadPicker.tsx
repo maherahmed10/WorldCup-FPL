@@ -7,7 +7,7 @@
 //   • Drag a bench player onto a starter (or vice-versa) to SWAP who starts,
 //     as long as it keeps a valid formation (1 GK; 3–5 DEF; 2–5 MID; 1–3 FWD).
 //   • Tap-to-swap fallback for mobile / no-drag.
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { Flag } from "@/components/Flag";
