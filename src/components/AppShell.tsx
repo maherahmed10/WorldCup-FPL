@@ -7,6 +7,17 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 
+function GafferLogo({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M9.5 4 C9.5 6.5 14.5 6.5 14.5 4 Q17 4 18.5 6.5 L21.5 9 Q22.5 10.5 21 11.5 L18.5 10.5 L18.5 21.5 L5.5 21.5 L5.5 10.5 L3 11.5 Q1.5 10.5 2.5 9 L5.5 6.5 Q7 4 9.5 4 Z"
+        fill="white"
+      />
+    </svg>
+  );
+}
+
 const NAV = [
   { id: "home", label: "Home", icon: "home", href: "/home" },
   { id: "team", label: "My Team", icon: "team", href: "/team" },
@@ -57,7 +68,7 @@ export function AppShell({
       {/* ---- desktop sidebar ---- */}
       <aside className="sidebar">
         <Link href="/home" className="brand" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="brand-mark">G</div>
+          <div className="brand-mark"><GafferLogo size={20} /></div>
           <div className="brand-name">GAFFER</div>
         </Link>
         <nav className="nav">
@@ -123,7 +134,7 @@ export function AppShell({
       <header className="topbar">
         <Link href="/home" className="brand" style={{ padding: 0, textDecoration: "none", color: "inherit" }}>
           <div className="brand-mark" style={{ width: 30, height: 30, fontSize: 17 }}>
-            G
+            <GafferLogo size={17} />
           </div>
           <div className="brand-name" style={{ fontSize: 19 }}>
             GAFFER

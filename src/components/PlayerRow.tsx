@@ -34,6 +34,8 @@ export function PlayerRow({
   picked = false,
   disabled = false,
   reason,
+  isFavourite,
+  onFavourite,
 }: {
   p: PlayerView;
   variant?: "market" | "pick";
@@ -41,6 +43,8 @@ export function PlayerRow({
   picked?: boolean;
   disabled?: boolean;
   reason?: string;
+  isFavourite?: boolean;
+  onFavourite?: () => void;
 }) {
   const clickable = variant === "pick" && !disabled;
   const Wrapper = clickable ? "button" : "div";
@@ -83,6 +87,25 @@ export function PlayerRow({
       <div className="num min-w-[50px] text-right text-[15px] font-extrabold">
         £{p.price.toFixed(1)}
       </div>
+
+      {variant === "market" && onFavourite !== undefined && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onFavourite(); }}
+          aria-label={isFavourite ? "Remove from favourites" : "Add to favourites"}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "4px 2px",
+            fontSize: 18,
+            lineHeight: 1,
+            color: isFavourite ? "#e11d48" : "var(--text-3)",
+            flexShrink: 0,
+          }}
+        >
+          {isFavourite ? "♥" : "♡"}
+        </button>
+      )}
 
       {variant === "pick" && (
         <div className="flex w-[30px] shrink-0 justify-end">

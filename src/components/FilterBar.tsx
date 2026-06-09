@@ -21,12 +21,14 @@ export function FilterBar({
   countries,
   showSort = true,
   showPrice = true,
+  showFavourites = false,
 }: {
   filter: PlayerFilter;
   onChange: (patch: Partial<PlayerFilter>) => void;
   countries: string[];
   showSort?: boolean;
   showPrice?: boolean;
+  showFavourites?: boolean;
 }) {
   const selectStyle = {
     background: "var(--surface-2)",
@@ -74,6 +76,19 @@ export function FilterBar({
             </button>
           );
         })}
+        {showFavourites && (
+          <button
+            onClick={() => onChange({ favouritesOnly: !filter.favouritesOnly })}
+            className="rounded-full border px-3.5 py-1.5 text-[13px] font-bold transition-colors"
+            style={{
+              background: filter.favouritesOnly ? "#e11d48" : "var(--surface-2)",
+              borderColor: filter.favouritesOnly ? "#e11d48" : "var(--line)",
+              color: filter.favouritesOnly ? "#fff" : "var(--text-2)",
+            }}
+          >
+            ♥ Favourites
+          </button>
+        )}
       </div>
 
       {/* selects + price slider */}

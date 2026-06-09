@@ -13,19 +13,50 @@ import {
 import { FilterBar } from "@/components/FilterBar";
 import { PlayerRow } from "@/components/PlayerRow";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
+import { toggleFavourite } from "./actions";
 
-export function PlayersClient({ players }: { players: PlayerView[] }) {
+export function PlayersClient({
+  players,
+  initialFavouriteIds = [],
+}: {
+  players: PlayerView[];
+  initialFavouriteIds?: string[];
+}) {
   const [filter, setFilter] = useState<PlayerFilter>(DEFAULT_FILTER);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [favouriteIds, setFavouriteIds] = useState<Set<string>>(
+    () => new Set(initialFavouriteIds),
+  );
 
   const countries = useMemo(
     () => Array.from(new Set(players.map((p) => p.country))).sort((a, b) => a.localeCompare(b)),
     [players],
   );
 
-  const list = useMemo(() => filterAndSortPlayers(players, filter), [players, filter]);
+  const list = useMemo(
+    () => filterAndSortPlayers(players, filter, favouriteIds),
+    [players, filter, favouriteIds],
+  );
 
   const patch = (p: Partial<PlayerFilter>) => setFilter((f) => ({ ...f, ...p }));
+
+  function toggleFavouriteLocal(id: string) {
+    setFavouriteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    toggleFavourite(id).catch(() => {
+      // revert on failure
+      setFavouriteIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    });
+  }
 
   return (
     <div>
@@ -36,7 +67,12 @@ export function PlayersClient({ players }: { players: PlayerView[] }) {
         </p>
       </div>
 
-      <FilterBar filter={filter} onChange={patch} countries={countries} />
+      <FilterBar
+        filter={filter}
+        onChange={patch}
+        countries={countries}
+        showFavourites
+      />
 
       {list.length === 0 ? (
         <div
@@ -44,9 +80,15 @@ export function PlayersClient({ players }: { players: PlayerView[] }) {
           style={{ background: "var(--surface)", borderColor: "var(--line)", color: "var(--text-2)" }}
         >
           <div className="text-lg font-bold" style={{ color: "var(--text)" }}>
-            No players found
+            {filter.favouritesOnly && favouriteIds.size === 0
+              ? "No favourites yet"
+              : "No players found"}
           </div>
-          <p className="mt-1">Try widening the price range or clearing a filter.</p>
+          <p className="mt-1">
+            {filter.favouritesOnly && favouriteIds.size === 0
+              ? "Heart a player to save them here for later."
+              : "Try widening the price range or clearing a filter."}
+          </p>
         </div>
       ) : (
         <>
@@ -65,7 +107,12 @@ export function PlayersClient({ players }: { players: PlayerView[] }) {
                   }
                 }}
               >
-                <PlayerRow p={p} variant="market" />
+                <PlayerRow
+                  p={p}
+                  variant="market"
+                  isFavourite={favouriteIds.has(p.id)}
+                  onFavourite={() => toggleFavouriteLocal(p.id)}
+                />
               </div>
             ))}
           </div>

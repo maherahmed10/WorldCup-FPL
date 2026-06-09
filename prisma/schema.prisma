@@ -85,6 +85,7 @@ model User {
   h2hReceived     H2HChallenge[] @relation("H2HOpponent")
   h2hWon          H2HChallenge[] @relation("H2HWinner")
   gameweekPicks   GameweekPick[]
+  playerFavourites PlayerFavourite[]
 }
 
 model League {
@@ -156,6 +157,7 @@ model Player {
 
   matchStats   PlayerMatchStat[]
   squadPlayers SquadPlayer[]
+  favourites   PlayerFavourite[]
 
   @@index([teamId])
   @@index([position])
@@ -363,6 +365,19 @@ model H2HChallenge {
   @@index([opponentId])
   @@index([status])
   @@index([fixtureId])
+}
+
+// PlayerFavourite — a player a user has hearted for later reference.
+model PlayerFavourite {
+  userId    String   @db.Uuid
+  playerId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([userId, playerId])
+  @@index([userId])
 }
 
 // StoreItem — catalogue entry (seeded, not user-created).

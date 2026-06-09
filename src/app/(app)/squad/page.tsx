@@ -15,7 +15,7 @@ export default async function SquadPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [players, rawPerks, gameweek, appUser] = await Promise.all([
+  const [players, rawPerks, gameweek, appUser, favouriteRows] = await Promise.all([
     db.player.findMany({
       include: { team: true },
       orderBy: [{ price: "desc" }, { name: "asc" }],
@@ -26,6 +26,7 @@ export default async function SquadPage() {
     }),
     getCurrentGameweek(),
     db.user.findUnique({ where: { id: user.id }, select: { bettingBalance: true, squadBudgetBonus: true } }),
+    db.playerFavourite.findMany({ where: { userId: user.id }, select: { playerId: true } }),
   ]);
 
   const pool: PickerPlayer[] = players.map((p) => ({
@@ -39,6 +40,7 @@ export default async function SquadPage() {
   const perks = rawPerks as PerkLike[];
   const maxPerCountry = getMaxPerCountry(perks);
   const isGroupStage = !(gameweek?.isKnockout ?? false);
+  const initialFavouriteIds = favouriteRows.map((f) => f.playerId);
 
   const existing = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
   const budgetBonus = appUser?.squadBudgetBonus ?? 0;
@@ -70,6 +72,7 @@ export default async function SquadPage() {
         budgetBonus={budgetBonus}
         ownedPerks={perks}
         isGroupStage={isGroupStage}
+        initialFavouriteIds={initialFavouriteIds}
       />
     </>
   );

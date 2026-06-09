@@ -76,6 +76,7 @@ export interface PlayerFilter {
   sort: PlayerSort;
   q: string;
   maxPrice: number; // millions
+  favouritesOnly: boolean;
 }
 
 export const DEFAULT_FILTER: PlayerFilter = {
@@ -84,6 +85,7 @@ export const DEFAULT_FILTER: PlayerFilter = {
   sort: "pts",
   q: "",
   maxPrice: 13,
+  favouritesOnly: false,
 };
 
 const SORTERS: Record<PlayerSort, (a: PlayerView, b: PlayerView) => number> = {
@@ -95,13 +97,18 @@ const SORTERS: Record<PlayerSort, (a: PlayerView, b: PlayerView) => number> = {
 };
 
 /** Pure filter + sort, mirroring design/playerlist.jsx `usePlayerFilter`. */
-export function filterAndSortPlayers(players: PlayerView[], f: PlayerFilter): PlayerView[] {
+export function filterAndSortPlayers(
+  players: PlayerView[],
+  f: PlayerFilter,
+  favouriteIds?: Set<string>,
+): PlayerView[] {
   const q = f.q.trim().toLowerCase();
   const out = players.filter((p) => {
     if (f.pos !== "ALL" && p.position !== f.pos) return false;
     if (f.country !== "ALL" && p.country !== f.country) return false;
     if (p.price > f.maxPrice + 0.001) return false;
     if (q && !p.name.toLowerCase().includes(q)) return false;
+    if (f.favouritesOnly && !favouriteIds?.has(p.id)) return false;
     return true;
   });
   return out.sort(SORTERS[f.sort] ?? SORTERS.pts);
