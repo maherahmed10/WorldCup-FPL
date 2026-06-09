@@ -8,19 +8,20 @@ import { getCurrentUser } from "@/lib/current-user";
 import {
   matchMarkets,
   scorerMultiplier,
-  PLAYER_PROP_MULTIPLIER,
+  assistMultiplier,
+  cardMultiplier,
   type BetLike,
   type MarketType,
 } from "@/lib/betting";
 import { judgementScorerOdds } from "@/lib/scorer-odds";
-import { PredictClient, type BetView, type FixtureMarketsView } from "./PredictClient";
+import { PredictClient, type BetView, type FixtureMarketsView, type ParlayView } from "./PredictClient";
 import type { H2HChallengeView } from "./H2HClient";
 
 export const dynamic = "force-dynamic";
 
 const MAX_FIXTURES = 10;
 const SCORERS_PER_TEAM = 3;
-const CARDS_PER_TEAM = 2;
+const CARDS_PER_TEAM = 3; // match scorer/assist so every market shows 3 per team
 
 const MARKET_LABEL: Record<MarketType, string> = {
   MATCH_RESULT: "Match Result",
@@ -115,14 +116,16 @@ export default async function PredictPage() {
   const defenders = teamIds.length
     ? await db.player.findMany({
         where: { teamId: { in: teamIds }, position: { in: ["DEF", "MID"] } },
-        select: { id: true, name: true, teamId: true },
+        select: { id: true, name: true, teamId: true, position: true, price: true },
         orderBy: [{ price: "desc" }, { name: "asc" }],
       })
     : [];
-  const cardsByTeam = new Map<string, Array<{ id: string; name: string }>>();
+  type CardCand = { id: string; name: string; position: "DEF" | "MID"; price: number };
+  const cardsByTeam = new Map<string, CardCand[]>();
   for (const d of defenders) {
     const list = cardsByTeam.get(d.teamId) ?? [];
-    if (list.length < CARDS_PER_TEAM) list.push({ id: d.id, name: d.name });
+    if (list.length < CARDS_PER_TEAM)
+      list.push({ id: d.id, name: d.name, position: d.position as "DEF" | "MID", price: d.price });
     cardsByTeam.set(d.teamId, list);
   }
 
@@ -149,18 +152,18 @@ export default async function PredictPage() {
           multiplier: judgementScorerOdds(s.name) ?? scorerMultiplier(s.position, s.price),
         })),
       });
-      // To Assist — same creative pool, fixed multiplier (our own market, §7).
+      // To Assist — same creative pool, priced per-player by position + price.
       groups.push({
         marketType: "PLAYER_ASSIST",
         label: MARKET_LABEL.PLAYER_ASSIST,
         options: scorers.map((s) => ({
           name: s.name,
           selection: `assist:${s.id}`,
-          multiplier: PLAYER_PROP_MULTIPLIER.PLAYER_ASSIST,
+          multiplier: assistMultiplier(s.position, s.price),
         })),
       });
     }
-    // To Be Carded — defenders / defensive mids, fixed multiplier.
+    // To Be Carded — defenders / defensive mids, priced per-player by position + price.
     const cardCandidates = [
       ...(cardsByTeam.get(f.homeTeamId) ?? []),
       ...(cardsByTeam.get(f.awayTeamId) ?? []),
@@ -172,12 +175,14 @@ export default async function PredictPage() {
         options: cardCandidates.map((c) => ({
           name: c.name,
           selection: `card:${c.id}`,
-          multiplier: PLAYER_PROP_MULTIPLIER.PLAYER_CARD,
+          multiplier: cardMultiplier(c.position, c.price),
         })),
       });
     }
     return {
       fixtureId: f.id,
+      homeTeamId: f.homeTeamId,
+      awayTeamId: f.awayTeamId,
       home: { name: f.homeTeam.name, logoUrl: f.homeTeam.logoUrl },
       away: { name: f.awayTeam.name, logoUrl: f.awayTeam.logoUrl },
       time: formatKickoff(f.kickoff),
@@ -231,6 +236,51 @@ export default async function PredictPage() {
       payout: b.payout,
     };
   });
+
+  // Parlays (accumulators) for My Bets.
+  const rawParlays = user
+    ? await db.parlay.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          legs: {
+            include: {
+              fixture: {
+                select: {
+                  homeTeam: { select: { name: true } },
+                  awayTeam: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      })
+    : [];
+  // Resolve player names for any player-prop legs.
+  const parlayPropIds = rawParlays
+    .flatMap((p) => p.legs)
+    .map((l) => l.selection.split(":"))
+    .filter(([kind, id]) => id && (kind === "scorer" || kind === "assist" || kind === "card"))
+    .map(([, id]) => id);
+  const parlayPropPlayers = parlayPropIds.length
+    ? await db.player.findMany({ where: { id: { in: parlayPropIds } }, select: { id: true, name: true } })
+    : [];
+  const parlayNames = new Map([...playerNames, ...parlayPropPlayers.map((p) => [p.id, p.name] as const)]);
+
+  const parlays: ParlayView[] = rawParlays.map((p) => ({
+    id: p.id,
+    stake: p.stake,
+    multiplier: p.multiplier,
+    status: p.status,
+    payout: p.payout,
+    legs: p.legs.map((l) => ({
+      pick: describePick(l.selection, l.fixture.homeTeam.name, l.fixture.awayTeam.name, parlayNames),
+      market: MARKET_LABEL[l.marketType],
+      match: `${l.fixture.homeTeam.name} v ${l.fixture.awayTeam.name}`,
+      multiplier: l.multiplier,
+      status: l.status,
+    })),
+  }));
 
   // H2H challenges for the current user (as creator or opponent).
   const rawH2H = user
@@ -295,6 +345,7 @@ export default async function PredictPage() {
     <PredictClient
       markets={markets}
       bets={bets}
+      parlays={parlays}
       balance={balance}
       h2hChallenges={h2hChallenges}
       userId={user?.id ?? ""}

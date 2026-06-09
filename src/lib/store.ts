@@ -6,26 +6,29 @@
 // must match the IDs in that script.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Costs are in £ (same unit as User.bettingBalance — 1_000_000 = £1M). The store
+// unlocks after the group stage, when the user's bank = leftover squad budget +
+// the £5M stipend ± betting P&L, so prices sit in the £1–3M band.
 export const STORE_ITEMS = [
   {
     id: "perk_extra_captain",
     name: "Extra Captain",
     description: "Your captain scores triple points for one gameweek.",
-    cost: 300,
+    cost: 2_000_000,
     effectKey: "extra_captain" as const,
   },
   {
     id: "perk_extra_transfer",
     name: "Extra Transfer",
     description: "One free transfer outside the normal transfer window.",
-    cost: 200,
+    cost: 1_000_000,
     effectKey: "extra_transfer" as const,
   },
   {
     id: "perk_bench_boost",
     name: "Bench Boost",
     description: "Your bench players' points count for one full gameweek.",
-    cost: 250,
+    cost: 3_000_000,
     effectKey: "bench_boost" as const,
   },
 ] as const;

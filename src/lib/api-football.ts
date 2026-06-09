@@ -121,6 +121,42 @@ export interface ApiFixturePlayers {
   players: ApiFixturePlayerStat[];
 }
 
+// Match events — /fixtures/events?fixture=ID.
+// One entry per goal, card, substitution, or VAR decision.
+export interface ApiMatchEvent {
+  time: { elapsed: number; extra: number | null };
+  team: { id: number; name: string };
+  player: { id: number | null; name: string | null };
+  assist: { id: number | null; name: string | null };
+  type: string; // "Goal" | "Card" | "subst" | "Var"
+  detail: string; // "Normal Goal" | "Yellow Card" | "Red Card" | "Substitution 1" etc.
+  comments: string | null;
+}
+
+// Team statistics — /fixtures/statistics?fixture=ID.
+// One entry per team, each with a list of {type, value} stat pairs.
+export interface ApiTeamStatistic {
+  team: { id: number; name: string };
+  statistics: Array<{ type: string; value: string | number | null }>;
+}
+
+// Lineup per team — /fixtures/lineups?fixture=ID.
+export interface ApiLineupPlayer {
+  player: {
+    id: number;
+    name: string;
+    number: number | null;
+    pos: string | null; // "G" | "D" | "M" | "F"
+    grid: string | null; // "1:1" | "2:3" etc.
+  };
+}
+export interface ApiTeamLineup {
+  team: { id: number; name: string };
+  formation: string | null; // "4-3-3"
+  startXI: ApiLineupPlayer[];
+  substitutes: ApiLineupPlayer[];
+}
+
 // Pre-match odds — /odds?fixture=ID. Nested: bookmakers → bets → values.
 // We read bet ids: 1 Match Winner, 5 Goals Over/Under, 8 Both Teams Score.
 // Odds have a 7-day upstream window, so only fixtures near kickoff return data.
@@ -177,4 +213,14 @@ export const apiFootball = {
 
   // Pre-match odds for one fixture (only available within ~7 days of kickoff).
   odds: (fixtureId: number) => get<ApiOdds>(`/odds?fixture=${fixtureId}`),
+
+  // Post-match enrichment (only call for FINISHED fixtures; stored once, served from DB).
+  fixtureEvents: (fixtureId: number) =>
+    get<ApiMatchEvent>(`/fixtures/events?fixture=${fixtureId}`),
+
+  fixtureStatistics: (fixtureId: number) =>
+    get<ApiTeamStatistic>(`/fixtures/statistics?fixture=${fixtureId}`),
+
+  fixtureLineups: (fixtureId: number) =>
+    get<ApiTeamLineup>(`/fixtures/lineups?fixture=${fixtureId}`),
 };

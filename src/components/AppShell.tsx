@@ -7,11 +7,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 
+function GafferLogo({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M9.5 4 C9.5 6.5 14.5 6.5 14.5 4 Q17 4 18.5 6.5 L21.5 9 Q22.5 10.5 21 11.5 L18.5 10.5 L18.5 21.5 L5.5 21.5 L5.5 10.5 L3 11.5 Q1.5 10.5 2.5 9 L5.5 6.5 Q7 4 9.5 4 Z"
+        fill="white"
+      />
+    </svg>
+  );
+}
+
 const NAV = [
   { id: "home", label: "Home", icon: "home", href: "/home" },
   { id: "team", label: "My Team", icon: "team", href: "/team" },
   { id: "players", label: "Players", icon: "players", href: "/players" },
-  { id: "predict", label: "Predictions", icon: "predictions", href: "/predict" },
+  { id: "predict", label: "Bets", icon: "predictions", href: "/predict" },
   { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues" },
   { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures" },
 ];
@@ -28,14 +39,23 @@ function activeTab(pathname: string): string {
 export function AppShell({
   children,
   user,
+  budgetRemaining = 1000,
 }: {
   children: React.ReactNode;
   user?: { name: string; handle?: string } | null;
+  budgetRemaining?: number; // tenths of a million; 1000 = £100m
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const tab = activeTab(pathname);
   const initial = (user?.name ?? "G").charAt(0).toUpperCase();
+
+  const budgetLabel = `£${(budgetRemaining / 10).toFixed(1)}m`;
+  const budgetPct = Math.max(0, Math.min(100, (budgetRemaining / 1000) * 100));
+  const budgetTone =
+    budgetRemaining <= 0 ? "var(--live)" :
+    budgetRemaining < 100 ? "var(--gold)" :
+    "var(--accent)";
 
   async function logout() {
     await fetch("/auth/signout", { method: "POST" });
@@ -48,7 +68,7 @@ export function AppShell({
       {/* ---- desktop sidebar ---- */}
       <aside className="sidebar">
         <Link href="/home" className="brand" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="brand-mark">G</div>
+          <div className="brand-mark"><GafferLogo size={20} /></div>
           <div className="brand-name">GAFFER</div>
         </Link>
         <nav className="nav">
@@ -65,6 +85,27 @@ export function AppShell({
             </Link>
           ))}
         </nav>
+
+        {/* Budget remaining */}
+        <div style={{ padding: "10px 16px 0" }}>
+          <div style={{
+            borderRadius: 12,
+            border: "1px solid var(--line)",
+            background: "var(--surface-2)",
+            padding: "10px 12px",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "var(--text-3)", textTransform: "uppercase" }}>Squad Budget</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: budgetTone, fontVariantNumeric: "tabular-nums" }}>
+                {budgetLabel} <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>left</span>
+              </span>
+            </div>
+            <div style={{ height: 4, borderRadius: 9999, background: "var(--line)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${budgetPct}%`, background: budgetTone, borderRadius: 9999, transition: "width 0.3s" }} />
+            </div>
+            <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>of £100.0m total</div>
+          </div>
+        </div>
         <div className="side-foot">
           <Link href="/squad" className={"nav-item" + (pathname.startsWith("/squad") ? " on" : "")}>
             <span className="nav-ico">
@@ -93,13 +134,23 @@ export function AppShell({
       <header className="topbar">
         <Link href="/home" className="brand" style={{ padding: 0, textDecoration: "none", color: "inherit" }}>
           <div className="brand-mark" style={{ width: 30, height: 30, fontSize: 17 }}>
-            G
+            <GafferLogo size={17} />
           </div>
           <div className="brand-name" style={{ fontSize: 19 }}>
             GAFFER
           </div>
         </Link>
-        <div className="row" style={{ gap: 6 }}>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5,
+            borderRadius: 20, border: "1px solid var(--line)",
+            background: "var(--surface-2)", padding: "4px 10px",
+          }}>
+            <Icon name="coins" size={13} style={{ color: budgetTone }} />
+            <span style={{ fontSize: 12, fontWeight: 800, color: budgetTone, fontVariantNumeric: "tabular-nums" }}>
+              {budgetLabel}
+            </span>
+          </div>
           <div
             className="avatar"
             style={{ width: 32, height: 32, fontSize: 14, cursor: "pointer" }}

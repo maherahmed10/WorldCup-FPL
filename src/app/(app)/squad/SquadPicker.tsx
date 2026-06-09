@@ -19,16 +19,20 @@ import type { PerkLike } from "@/lib/store";
 import {
   SQUAD_QUOTA,
   XI_SIZE,
+  FORMATIONS,
   validateSquad,
   countByCountry,
   countByPosition,
   formationName,
   canSwap,
+  canFieldFormation,
+  splitStartingXI,
   type Position,
   type SquadPlayer,
 } from "@/lib/squad-rules";
 import { countryCode } from "@/lib/countries";
 import { saveSquad } from "./actions";
+import { toggleFavourite } from "../players/actions";
 
 export interface PickerPlayer extends SquadPlayer {
   name: string;
@@ -41,10 +45,7 @@ const POS_NAME: Record<Position, string> = { GK: "Goalkeeper", DEF: "Defender", 
 const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
 const lastName = (n: string) => n.split(" ").slice(-1)[0];
 
-// The starting XI begins as 4-3-3. The pitch shows however many starters are in
-// each line (the implicit formation); empty starting slots fill up to this until
-// a full XI exists, after which drags between pitch/bench change the shape.
-const INITIAL_XI: Record<Position, number> = { GK: 1, DEF: 4, MID: 3, FWD: 3 };
+const DEFAULT_FORMATION = "4-3-3";
 
 // A pitch row is a position with its filled players + empty slots up to quota.
 type PitchSlot = { position: Position; player: SquadEntry | null };
@@ -61,6 +62,7 @@ export function SquadPicker({
   budgetBonus = 0,
   ownedPerks = [],
   isGroupStage = true,
+  initialFavouriteIds = [],
 }: {
   pool: PickerPlayer[];
   gameweekLabel: string;
@@ -73,9 +75,31 @@ export function SquadPicker({
   budgetBonus?: number;
   ownedPerks?: PerkLike[];
   isGroupStage?: boolean;
+  initialFavouriteIds?: string[];
 }) {
   const router = useRouter();
   const byId = useMemo(() => new Map(pool.map((p) => [p.id, p])), [pool]);
+
+  const [favouriteIds, setFavouriteIds] = useState<Set<string>>(
+    () => new Set(initialFavouriteIds),
+  );
+
+  function toggleFavouriteLocal(id: string) {
+    setFavouriteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    toggleFavourite(id).catch(() => {
+      setFavouriteIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    });
+  }
 
   const [squad, setSquad] = useState<SquadEntry[]>(() => {
     const make = (id: string, isStarting: boolean): SquadEntry | null => {
@@ -96,8 +120,26 @@ export function SquadPicker({
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   // A player whose full profile modal is open (from menu or picker identity zone).
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [selectedFormation, setSelectedFormation] = useState(
+    () => formationName(squad.filter((p) => p.isStarting)) ?? DEFAULT_FORMATION,
+  );
+
+  function applyFormation(f: string) {
+    const split = splitStartingXI(squad, f);
+    if (!split) return;
+    const starterSet = new Set(split.starters.map((p) => p.id));
+    setSquad((prev) => prev.map((p) => ({ ...p, isStarting: starterSet.has(p.id) })));
+    setSelectedFormation(f);
+  }
+
   // True between dragstart and the click it synthesizes, so tap-after-drag is ignored.
   const draggedRef = useRef(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const onDragStart = (id: string) => setDraggingId(id);
+  const onDragEnd   = () => { setDraggingId(null); setDragOverId(null); };
+  const onDragEnter = (id: string) => setDragOverId(id);
+  const onDragLeave = () => setDragOverId(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -140,7 +182,7 @@ export function SquadPicker({
     const starter = a.isStarting ? a : b;
     const reserve = a.isStarting ? b : a;
     if (!canSwap(starters, starter, reserve)) {
-      setMessage(`Can't sub a ${reserve.position} for a ${starter.position} — the result isn't an allowed formation (4-4-2, 4-3-3, 3-5-2, 3-4-3, 5-3-2, 4-5-1).`);
+      setMessage(`Can't sub a ${reserve.position} for a ${starter.position} — use the formation buttons above to switch shape.`);
       return false;
     }
     setMessage(null);
@@ -231,7 +273,7 @@ export function SquadPicker({
       //   • the SQUAD QUOTA for this position (2/5/5/3) minus everyone of that
       //     position already in the 15 — so you can't add a 4th FWD, etc.
       const quotaRoom = Math.max(0, SQUAD_QUOTA[pos] - byPos[pos]);
-      const want = Math.max(0, INITIAL_XI[pos] - startingHere.length);
+      const want = Math.max(0, (FORMATIONS[selectedFormation]?.[pos] ?? 0) - startingHere.length);
       const show = Math.min(want, emptyBudget, quotaRoom);
       for (let i = 0; i < show; i++) pitchRows[pos].push({ position: pos, player: null });
       emptyBudget -= show;
@@ -300,15 +342,32 @@ export function SquadPicker({
         <div>
           <div className="pitch-toolbar">
             <span className="pt-label">Formation</span>
-            <span className={"pill " + (currentFormation ? "pill-accent" : starters.length === XI_SIZE ? "pill-live" : "")}>
-              {currentFormation ?? shapeStr}
-            </span>
-            {currentFormation ? (
-              <span className="muted" style={{ fontSize: 12 }}>Drag a sub onto a starter to change shape</span>
-            ) : starters.length === XI_SIZE ? (
-              <span style={{ fontSize: 12, color: "var(--live)" }}>Not an allowed formation</span>
-            ) : (
-              <span className="muted" style={{ fontSize: 12 }}>{starters.length}/{XI_SIZE} starters</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {Object.keys(FORMATIONS).map((f) => {
+                const active = currentFormation === f;
+                const canField = canFieldFormation(squad, f);
+                return (
+                  <button
+                    key={f}
+                    onClick={() => canField && applyFormation(f)}
+                    disabled={!canField}
+                    className={"pill" + (active ? " pill-accent" : "")}
+                    style={{
+                      opacity: canField ? 1 : 0.35,
+                      cursor: canField ? "pointer" : "not-allowed",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                    title={canField ? `Switch to ${f}` : `Not enough players to field ${f}`}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+            {!currentFormation && starters.length === XI_SIZE && (
+              <span style={{ fontSize: 12, color: "var(--live)", width: "100%" }}>
+                Not a valid formation — drag to fix or pick one above
+              </span>
             )}
           </div>
           <div className="pitch-wrap">
@@ -320,6 +379,12 @@ export function SquadPicker({
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
               draggedRef={draggedRef}
+              draggingId={draggingId}
+              dragOverId={dragOverId}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDragEnter={onDragEnter}
+              onDragLeave={onDragLeave}
             />
             <BenchRow
               bench={bench}
@@ -330,6 +395,12 @@ export function SquadPicker({
               onAdd={(pos) => setPickerFor({ pos, starter: false })}
               byPos={byPos}
               draggedRef={draggedRef}
+              draggingId={draggingId}
+              dragOverId={dragOverId}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDragEnter={onDragEnter}
+              onDragLeave={onDragLeave}
             />
           </div>
         </div>
@@ -362,6 +433,8 @@ export function SquadPicker({
           onPick={addPlayer}
           onProfile={(id) => setProfileId(id)}
           onClose={() => setPickerFor(null)}
+          favouriteIds={favouriteIds}
+          onFavouriteToggle={toggleFavouriteLocal}
         />
       )}
 
@@ -461,6 +534,12 @@ function PlayerToken({
   onTap,
   onDropSwap,
   draggedRef,
+  isDragging,
+  isDragOver,
+  onDragStarted,
+  onDragEnded,
+  onDragEntered,
+  onDragLeft,
 }: {
   entry: SquadEntry;
   isCaptain: boolean;
@@ -468,18 +547,44 @@ function PlayerToken({
   onTap: () => void;
   onDropSwap: (draggedId: string) => void;
   draggedRef: React.MutableRefObject<boolean>;
+  isDragging: boolean;
+  isDragOver: boolean;
+  onDragStarted: () => void;
+  onDragEnded: () => void;
+  onDragEntered: () => void;
+  onDragLeft: () => void;
 }) {
   return (
     <div
       className="slot"
       draggable
+      style={{
+        opacity: isDragging ? 0.32 : 1,
+        transition: "opacity .12s, transform .15s",
+        cursor: isDragging ? "grabbing" : "grab",
+        ...(isDragOver && {
+          outline: "2px solid var(--accent)",
+          outlineOffset: "3px",
+          borderRadius: 12,
+          boxShadow: "0 0 0 5px rgba(24,224,138,0.18), 0 8px 24px rgba(0,0,0,0.35)",
+          transform: "scale(1.07) translateY(-3px)",
+        }),
+      }}
       onDragStart={(e) => {
-        draggedRef.current = true; // suppress the synthetic click that follows
+        draggedRef.current = true;
         e.dataTransfer.setData("text/plain", entry.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStarted();
+      }}
+      onDragEnd={onDragEnded}
+      onDragEnter={(e) => { e.preventDefault(); onDragEntered(); }}
+      onDragLeave={(e) => {
+        if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) onDragLeft();
       }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
+        onDragEnded();
         const dragged = e.dataTransfer.getData("text/plain");
         if (dragged && dragged !== entry.id) onDropSwap(dragged);
       }}
@@ -505,6 +610,12 @@ function Pitch({
   onTapPlayer,
   onSwap,
   draggedRef,
+  draggingId,
+  dragOverId,
+  onDragStart,
+  onDragEnd,
+  onDragEnter,
+  onDragLeave,
 }: {
   rows: Record<Position, PitchSlot[]>;
   captainId: string | null;
@@ -513,6 +624,12 @@ function Pitch({
   onTapPlayer: (id: string) => void;
   onSwap: (aId: string, bId: string) => boolean;
   draggedRef: React.MutableRefObject<boolean>;
+  draggingId: string | null;
+  dragOverId: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onDragEnter: (id: string) => void;
+  onDragLeave: () => void;
 }) {
   return (
     <div className="pitch">
@@ -530,6 +647,12 @@ function Pitch({
                   onTap={() => onTapPlayer(slot.player!.id)}
                   onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
                   draggedRef={draggedRef}
+                  isDragging={draggingId === slot.player.id}
+                  isDragOver={dragOverId === slot.player.id}
+                  onDragStarted={() => onDragStart(slot.player!.id)}
+                  onDragEnded={onDragEnd}
+                  onDragEntered={() => onDragEnter(slot.player!.id)}
+                  onDragLeft={onDragLeave}
                 />
               ) : (
                 <button key={pos + i} className="slot slot-empty" onClick={() => onEmpty(pos)}>
@@ -570,6 +693,12 @@ function BenchRow({
   onAdd,
   byPos,
   draggedRef,
+  draggingId,
+  dragOverId,
+  onDragStart,
+  onDragEnd,
+  onDragEnter,
+  onDragLeave,
 }: {
   bench: SquadEntry[];
   captainId: string | null;
@@ -579,8 +708,13 @@ function BenchRow({
   onAdd: (pos: Position) => void;
   byPos: Record<Position, number>;
   draggedRef: React.MutableRefObject<boolean>;
+  draggingId: string | null;
+  dragOverId: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onDragEnter: (id: string) => void;
+  onDragLeave: () => void;
 }) {
-  // Show 4 bench slots; empties prompt to add the position the squad still needs.
   const missing: Position[] = [];
   for (const pos of POS_ORDER) {
     const short = SQUAD_QUOTA[pos] - byPos[pos];
@@ -593,33 +727,57 @@ function BenchRow({
     <div className="bench">
       <div className="bench-label">Substitutes — drag onto a starter to swap, or tap for options</div>
       <div className="bench-row">
-        {bench.map((p) => (
-          <div
-            key={p.id}
-            className="bench-slot"
-            draggable
-            onDragStart={(e) => {
-              draggedRef.current = true;
-              e.dataTransfer.setData("text/plain", p.id);
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const dragged = e.dataTransfer.getData("text/plain");
-              if (dragged && dragged !== p.id) onSwap(dragged, p.id);
-            }}
-            onClick={() => onTapPlayer(p.id)}
-            role="button"
-            title={`${p.name} — tap for options`}
-          >
-            {p.id === captainId && <span className="cap-badge">C</span>}
-            {p.id === viceId && p.id !== captainId && <span className="cap-badge vice">V</span>}
-            <span className={"bench-pos pos pos-" + p.position}>{p.position}</span>
-            <Jersey country={p.country} size={32} />
-            <span className="bench-name">{lastName(p.name)}</span>
-            <span className="bench-price num">£{(p.price / 10).toFixed(1)}</span>
-          </div>
-        ))}
+        {bench.map((p) => {
+          const isDragging = draggingId === p.id;
+          const isDragOver = dragOverId === p.id;
+          return (
+            <div
+              key={p.id}
+              className="bench-slot"
+              draggable
+              style={{
+                opacity: isDragging ? 0.32 : 1,
+                transition: "opacity .12s, transform .15s, box-shadow .15s",
+                cursor: isDragging ? "grabbing" : "grab",
+                ...(isDragOver && {
+                  outline: "2px solid var(--accent)",
+                  outlineOffset: "3px",
+                  boxShadow: "0 0 0 5px rgba(24,224,138,0.18), 0 8px 20px rgba(0,0,0,0.3)",
+                  transform: "scale(1.05)",
+                  background: "var(--surface-3)",
+                }),
+              }}
+              onDragStart={(e) => {
+                draggedRef.current = true;
+                e.dataTransfer.setData("text/plain", p.id);
+                e.dataTransfer.effectAllowed = "move";
+                onDragStart(p.id);
+              }}
+              onDragEnd={onDragEnd}
+              onDragEnter={(e) => { e.preventDefault(); onDragEnter(p.id); }}
+              onDragLeave={(e) => {
+                if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) onDragLeave();
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                onDragEnd();
+                const dragged = e.dataTransfer.getData("text/plain");
+                if (dragged && dragged !== p.id) onSwap(dragged, p.id);
+              }}
+              onClick={() => onTapPlayer(p.id)}
+              role="button"
+              title={`${p.name} — tap for options`}
+            >
+              {p.id === captainId && <span className="cap-badge">C</span>}
+              {p.id === viceId && p.id !== captainId && <span className="cap-badge vice">V</span>}
+              <span className={"bench-pos pos pos-" + p.position}>{p.position}</span>
+              <Jersey country={p.country} size={32} />
+              <span className="bench-name">{lastName(p.name)}</span>
+              <span className="bench-price num">£{(p.price / 10).toFixed(1)}</span>
+            </div>
+          );
+        })}
         {emptyPositions.map((pos, i) => (
           <button key={"be" + i} className="bench-slot empty" onClick={() => onAdd(pos)}>
             <span className={"bench-pos pos pos-" + pos}>{pos}</span>
@@ -712,6 +870,8 @@ function PickerModal({
   onPick,
   onProfile,
   onClose,
+  favouriteIds,
+  onFavouriteToggle,
 }: {
   position: Position;
   pool: PickerPlayer[];
@@ -723,12 +883,15 @@ function PickerModal({
   onPick: (p: PickerPlayer) => void;
   onProfile: (id: string) => void;
   onClose: () => void;
+  favouriteIds: Set<string>;
+  onFavouriteToggle: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [country, setCountry] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<number>(150); // tenths → 15.0M
   const [sort, setSort] = useState<SortKey>("price-desc");
   const [affordableOnly, setAffordableOnly] = useState(false);
+  const [favouriteOnly, setFavouriteOnly] = useState(false);
 
   // Countries available for this position (for the dropdown).
   const countries = useMemo(
@@ -743,13 +906,14 @@ function PickerModal({
     if (country) list = list.filter((p) => p.country === country);
     list = list.filter((p) => p.price <= maxPrice);
     if (affordableOnly) list = list.filter((p) => pickedIds.has(p.id) || p.price <= remaining);
+    if (favouriteOnly) list = list.filter((p) => favouriteIds.has(p.id));
     list = [...list].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
       if (sort === "price-asc") return a.price - b.price;
       return b.price - a.price;
     });
     return list.slice(0, 200);
-  }, [pool, position, search, country, maxPrice, sort, affordableOnly, pickedIds, remaining]);
+  }, [pool, position, search, country, maxPrice, sort, affordableOnly, favouriteOnly, favouriteIds, pickedIds, remaining]);
 
   return (
     <div className="modal-overlay side" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -801,6 +965,10 @@ function PickerModal({
                 <input type="checkbox" checked={affordableOnly} onChange={(e) => setAffordableOnly(e.target.checked)} />
                 Affordable only
               </label>
+              <label className="filter-toggle" style={{ color: favouriteOnly ? "#e11d48" : undefined }}>
+                <input type="checkbox" checked={favouriteOnly} onChange={(e) => setFavouriteOnly(e.target.checked)} />
+                ♥ Favourites only
+              </label>
             </div>
           </div>
 
@@ -837,6 +1005,24 @@ function PickerModal({
                         {tooPricey && !addDisabled && <span className="prow-sub" style={{ color: "var(--gold)" }}>Over budget</span>}
                       </span>
                       <span className="prow-hint" aria-hidden><Icon name="eye" size={15} /></span>
+                    </button>
+                    {/* favourite toggle */}
+                    <button
+                      className="prow-fav"
+                      onClick={() => onFavouriteToggle(p.id)}
+                      title={favouriteIds.has(p.id) ? "Remove from favourites" : "Add to favourites"}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: "0 6px",
+                        fontSize: 16,
+                        lineHeight: 1,
+                        color: favouriteIds.has(p.id) ? "#e11d48" : "var(--text-3)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {favouriteIds.has(p.id) ? "♥" : "♡"}
                     </button>
                     {/* action zone — add to squad (disabled when ineligible) */}
                     <button

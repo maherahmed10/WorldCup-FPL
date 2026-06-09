@@ -46,6 +46,8 @@ export const FORMATIONS: Record<string, Record<Position, number>> = {
   "3-4-3": { GK: 1, DEF: 3, MID: 4, FWD: 3 },
   "5-3-2": { GK: 1, DEF: 5, MID: 3, FWD: 2 },
   "4-5-1": { GK: 1, DEF: 4, MID: 5, FWD: 1 },
+  "5-4-1": { GK: 1, DEF: 5, MID: 4, FWD: 1 },
+  "5-2-3": { GK: 1, DEF: 5, MID: 2, FWD: 3 },
 };
 
 export const totalPrice = (players: SquadPlayer[]): number =>
