@@ -21,7 +21,7 @@ export default async function AppLayout({
   if (!user) redirect("/login");
 
   // Ensure a matching app User row exists (created on first authed visit).
-  const [appUser, gameweek] = await Promise.all([
+  const [appUser, gameweek, pendingH2HCount] = await Promise.all([
     db.user.upsert({
       where: { id: user.id },
       update: {},
@@ -36,6 +36,7 @@ export default async function AppLayout({
       },
     }),
     getCurrentGameweek(),
+    db.h2HChallenge.count({ where: { opponentId: user.id, status: "PENDING" } }),
   ]);
 
   const squad = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
@@ -47,6 +48,7 @@ export default async function AppLayout({
       <AppShell
         user={{ name: appUser.teamName ?? appUser.name, handle: appUser.email }}
         budgetRemaining={budgetRemaining}
+        pendingH2HCount={pendingH2HCount}
       >
         {children}
       </AppShell>

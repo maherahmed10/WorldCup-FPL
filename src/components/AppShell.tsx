@@ -41,10 +41,12 @@ export function AppShell({
   children,
   user,
   budgetRemaining = 1000,
+  pendingH2HCount = 0,
 }: {
   children: React.ReactNode;
   user?: { name: string; handle?: string } | null;
   budgetRemaining?: number; // tenths of a million; 1000 = £100m
+  pendingH2HCount?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -73,18 +75,24 @@ export function AppShell({
           <div className="brand-name">GAFFER</div>
         </Link>
         <nav className="nav">
-          {NAV.map((n) => (
-            <Link
-              key={n.id}
-              href={n.href}
-              className={"nav-item" + (tab === n.id ? " on" : "")}
-            >
-              <span className="nav-ico">
-                <Icon name={n.icon} size={20} />
-              </span>
-              <span>{n.label}</span>
-            </Link>
-          ))}
+          {NAV.map((n) => {
+            const badge = n.id === "predict" && pendingH2HCount > 0 ? pendingH2HCount : 0;
+            return (
+              <Link
+                key={n.id}
+                href={n.href}
+                className={"nav-item" + (tab === n.id ? " on" : "")}
+              >
+                <span className="nav-ico" style={{ position: "relative" }}>
+                  <Icon name={n.icon} size={20} />
+                  {badge > 0 && (
+                    <span className="nav-badge">{badge > 9 ? "9+" : badge}</span>
+                  )}
+                </span>
+                <span>{n.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Budget remaining */}
@@ -161,18 +169,24 @@ export function AppShell({
 
       {/* ---- mobile bottom tab bar ---- */}
       <nav className="tabbar">
-        {NAV.map((n) => (
-          <Link
-            key={n.id}
-            href={n.href}
-            className={"tab" + (tab === n.id ? " on" : "")}
-          >
-            <span className="tab-ico">
-              <Icon name={n.icon} size={23} />
-            </span>
-            <span>{n.label}</span>
-          </Link>
-        ))}
+        {NAV.map((n) => {
+          const badge = n.id === "predict" && pendingH2HCount > 0 ? pendingH2HCount : 0;
+          return (
+            <Link
+              key={n.id}
+              href={n.href}
+              className={"tab" + (tab === n.id ? " on" : "")}
+            >
+              <span className="tab-ico" style={{ position: "relative" }}>
+                <Icon name={n.icon} size={23} />
+                {badge > 0 && (
+                  <span className="nav-badge">{badge > 9 ? "9+" : badge}</span>
+                )}
+              </span>
+              <span>{n.label}</span>
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );

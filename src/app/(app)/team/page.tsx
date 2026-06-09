@@ -125,7 +125,10 @@ export default async function TeamPage() {
   const isGroupStage = !(gameweek?.isKnockout ?? false);
 
   // Global rank board (added at the top — see leaderboard.ts).
-  const leaderboard = await getGlobalLeaderboard({ userId: user.id, gameweekId: gameweek!.id });
+  const [leaderboard, pendingH2HCount] = await Promise.all([
+    getGlobalLeaderboard({ userId: user.id, gameweekId: gameweek!.id }),
+    db.h2HChallenge.count({ where: { opponentId: user.id, status: "PENDING" } }),
+  ]);
 
   // "Your Players in Action Today" — fixtures within the current UTC day + 6h buffer for
   // late North-American kickoffs that cross midnight UTC.
@@ -208,6 +211,21 @@ export default async function TeamPage() {
       <div style={{ marginBottom: 14 }}>
         <RankBoard data={leaderboard} />
       </div>
+
+      {pendingH2HCount > 0 && (
+        <div className="banner live" style={{ marginBottom: 14 }}>
+          <div className="banner-l">
+            <div className="banner-ico">
+              <Icon name="predictions" size={20} style={{ color: "var(--live)" }} />
+            </div>
+            <div>
+              <h4>⚔️ {pendingH2HCount === 1 ? "1 H2H challenge" : `${pendingH2HCount} H2H challenges`} waiting</h4>
+              <p>A league opponent challenged you — accept or decline before it expires.</p>
+            </div>
+          </div>
+          <Link className="btn btn-ghost btn-sm" href="/predict">View</Link>
+        </div>
+      )}
 
       {playersInAction.length > 0 && (
         <div style={{ marginBottom: 14 }}>
