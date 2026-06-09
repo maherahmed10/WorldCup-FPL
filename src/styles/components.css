@@ -381,6 +381,19 @@
 .ev-red { background: var(--live); width: 9px; height: 13px; border-radius: 2px; }
 .ev-sub { background: var(--accent); color: var(--accent-ink); }
 
+/* -------------- FORMATION ANIMATION (SquadPicker) -------------- */
+/* Flat absolute layer — replaces flex pitch-rows for the picker pitch */
+.pitch-tokens {
+  position: absolute; inset: 0; z-index: 3;
+}
+/* Each wrapper is the animated element; top/left update on formation change */
+.pitch-token-pos {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition: top 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
 /* -------------- PLAYERS IN ACTION TODAY -------------- */
 .pia { border-radius: var(--r-lg); border: 1px solid rgba(24,224,138,.28); overflow: hidden;
   background: radial-gradient(110% 130% at 100% -20%, rgba(24,224,138,.10), transparent 55%), var(--surface); }

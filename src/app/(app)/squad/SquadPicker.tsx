@@ -693,6 +693,10 @@ function PlayerToken({
   );
 }
 
+// Row center positions as % of pitch height — tuned to match the flex layout's
+// natural row centers (padding 14px top / 16px bottom on a 300×380 aspect pitch).
+const ROW_TOP: Record<Position, number> = { GK: 15, DEF: 38, MID: 61, FWD: 84 };
+
 function Pitch({
   rows,
   captainId,
@@ -725,35 +729,48 @@ function Pitch({
   return (
     <div className="pitch">
       <PitchBg />
-      <div className="pitch-rows">
-        {POS_ORDER.map((pos) => (
-          <div key={pos} className="pitch-row">
-            {rows[pos].map((slot, i) =>
-              slot.player ? (
-                <PlayerToken
-                  key={slot.player.id}
-                  entry={slot.player}
-                  isCaptain={slot.player.id === captainId}
-                  isVice={slot.player.id === viceId}
-                  onTap={() => onTapPlayer(slot.player!.id)}
-                  onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
-                  draggedRef={draggedRef}
-                  isDragging={draggingId === slot.player.id}
-                  isDragOver={dragOverId === slot.player.id}
-                  onDragStarted={() => onDragStart(slot.player!.id)}
-                  onDragEnded={onDragEnd}
-                  onDragEntered={() => onDragEnter(slot.player!.id)}
-                  onDragLeft={onDragLeave}
-                />
-              ) : (
-                <button key={pos + i} className="slot slot-empty" onClick={() => onEmpty(pos)}>
-                  <span className="slot-plus"><Icon name="plus" size={22} stroke={2} /></span>
-                  <span className={"slot-pos pos pos-" + pos}>{pos}</span>
-                </button>
-              ),
-            )}
-          </div>
-        ))}
+      {/* Flat absolute layer — every token is a direct child keyed by player ID so
+          React never unmounts/remounts on formation change; only top/left update,
+          which CSS transitions animate. */}
+      <div className="pitch-tokens">
+        {POS_ORDER.flatMap((pos) => {
+          const slots = rows[pos];
+          const n = slots.length;
+          return slots.map((slot, i) => {
+            const top  = ROW_TOP[pos];
+            const left = ((i + 1) / (n + 1)) * 100;
+            const key  = slot.player ? slot.player.id : `${pos}-empty-${i}`;
+            return (
+              <div
+                key={key}
+                className="pitch-token-pos"
+                style={{ top: `${top}%`, left: `${left}%` }}
+              >
+                {slot.player ? (
+                  <PlayerToken
+                    entry={slot.player}
+                    isCaptain={slot.player.id === captainId}
+                    isVice={slot.player.id === viceId}
+                    onTap={() => onTapPlayer(slot.player!.id)}
+                    onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
+                    draggedRef={draggedRef}
+                    isDragging={draggingId === slot.player.id}
+                    isDragOver={dragOverId === slot.player.id}
+                    onDragStarted={() => onDragStart(slot.player!.id)}
+                    onDragEnded={onDragEnd}
+                    onDragEntered={() => onDragEnter(slot.player!.id)}
+                    onDragLeft={onDragLeave}
+                  />
+                ) : (
+                  <button className="slot slot-empty" onClick={() => onEmpty(pos)}>
+                    <span className="slot-plus"><Icon name="plus" size={22} stroke={2} /></span>
+                    <span className={"slot-pos pos pos-" + pos}>{pos}</span>
+                  </button>
+                )}
+              </div>
+            );
+          });
+        })}
       </div>
     </div>
   );
