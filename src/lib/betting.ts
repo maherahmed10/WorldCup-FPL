@@ -36,8 +36,8 @@ export function formatMoney(amount: number): string {
   return `£${amount.toLocaleString("en-GB")}`;
 }
 
-/** Smallest legal stake. */
-export const MIN_STAKE = 1;
+/** Smallest legal stake — the bank is the £5M stipend, so bets start at £50k. */
+export const MIN_STAKE = 50_000;
 
 /**
  * Fixed multipliers for OUR player-prop markets (§7). The API's World Cup

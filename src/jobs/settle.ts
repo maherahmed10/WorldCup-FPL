@@ -44,10 +44,13 @@ async function settlePlayerPropBets(fixtureId: string): Promise<number> {
       select: { minutes: true, goals: true, assists: true, yellowCards: true, redCards: true },
     });
     const status = settlePlayerProp(parsed.kind, stat);
-    await db.bet.update({
-      where: { id: bet.id },
-      data: { status, payout: payout(bet.stake, bet.multiplier, status) },
-    });
+    const pay = payout(bet.stake, bet.multiplier, status);
+    await db.$transaction([
+      db.bet.update({ where: { id: bet.id }, data: { status, payout: pay } }),
+      ...(pay > 0
+        ? [db.user.update({ where: { id: bet.userId }, data: { bettingBalance: { increment: pay } } })]
+        : []),
+    ]);
     settled++;
   }
   return settled;
@@ -104,9 +107,10 @@ export async function settleFixture(apiFixtureId: number) {
   //   • player props (scorer / assist / card)  → settlePlayerPropBets
   const matchBets = await settleFixtureBets(fixture.id);
   const propBets = await settlePlayerPropBets(fixture.id);
+  const parlays = await settleParlayLegs(fixture.id);
   const h2hSettled = await settleH2HChallenges(fixture.id);
   console.log(
-    `✓ settled fixture ${apiFixtureId}: ${written} stat rows, ${matchBets} match bets, ${propBets} prop bets, ${h2hSettled} H2H challenges`,
+    `✓ settled fixture ${apiFixtureId}: ${written} stat rows, ${matchBets} match bets, ${propBets} prop bets, ${parlays} parlays, ${h2hSettled} H2H challenges`,
   );
   return written;
 }
@@ -149,14 +153,93 @@ export async function settleFixtureBets(fixtureId: string): Promise<number> {
   let settled = 0;
   for (const bet of openBets) {
     const status = settleBetSelection(bet.selection, result);
-    await db.bet.update({
-      where: { id: bet.id },
-      data: { status, payout: payout(bet.stake, bet.multiplier, status) },
-    });
+    const pay = payout(bet.stake, bet.multiplier, status);
+    await db.$transaction([
+      db.bet.update({ where: { id: bet.id }, data: { status, payout: pay } }),
+      // Credit winnings (WON) / stake refund (VOID) back to the wallet. The stake
+      // was deducted at placement, so a LOST bet credits 0.
+      ...(pay > 0
+        ? [db.user.update({ where: { id: bet.userId }, data: { bettingBalance: { increment: pay } } })]
+        : []),
+    ]);
     settled++;
   }
   if (settled) console.log(`  ✓ bets: settled ${settled} on fixture ${fixture.apiFixtureId}`);
   return settled;
+}
+
+/**
+ * Settle parlay LEGS on one fixture, then re-evaluate the affected parlays.
+ * A leg resolves like a single bet (match market or player prop). A parlay:
+ *   • LOSES the moment ANY leg loses (payout 0),
+ *   • WINS only once EVERY leg has won (payout = stake × combined multiplier),
+ *   • a VOID leg is treated as multiplier 1.0 (push) — the parlay continues.
+ * Idempotent: only touches OPEN legs / OPEN parlays.
+ */
+export async function settleParlayLegs(fixtureId: string): Promise<number> {
+  const fixture = await db.fixture.findUnique({ where: { id: fixtureId } });
+  if (!fixture || fixture.homeScore == null || fixture.awayScore == null) return 0;
+
+  const scorerRows = await db.playerMatchStat.findMany({
+    where: { fixtureId, goals: { gt: 0 } },
+    select: { playerId: true },
+  });
+  const result: MatchResult = {
+    homeScore: fixture.homeScore,
+    awayScore: fixture.awayScore,
+    scorerIds: new Set(scorerRows.map((r) => r.playerId)),
+  };
+
+  const legs = await db.parlayLeg.findMany({ where: { fixtureId, status: "OPEN" } });
+  const affected = new Set<string>();
+  for (const leg of legs) {
+    const isProp = ["PLAYER_SCORER", "PLAYER_ASSIST", "PLAYER_CARD"].includes(leg.marketType);
+    let status: import("@prisma/client").BetStatus;
+    if (isProp) {
+      const parsed = parsePlayerProp(leg.selection);
+      const stat = parsed
+        ? await db.playerMatchStat.findUnique({
+            where: { playerId_fixtureId: { playerId: parsed.playerId, fixtureId } },
+            select: { minutes: true, goals: true, assists: true, yellowCards: true, redCards: true },
+          })
+        : null;
+      status = parsed ? settlePlayerProp(parsed.kind, stat) : "VOID";
+    } else {
+      status = settleBetSelection(leg.selection, result);
+    }
+    await db.parlayLeg.update({ where: { id: leg.id }, data: { status } });
+    affected.add(leg.parlayId);
+  }
+
+  // Re-evaluate each parlay that had a leg resolved.
+  let settledParlays = 0;
+  for (const parlayId of affected) {
+    const parlay = await db.parlay.findUnique({
+      where: { id: parlayId },
+      include: { legs: true },
+    });
+    if (!parlay || parlay.status !== "OPEN") continue;
+
+    if (parlay.legs.some((l) => l.status === "LOST")) {
+      await db.parlay.update({ where: { id: parlay.id }, data: { status: "LOST", payout: 0 } });
+      settledParlays++;
+    } else if (parlay.legs.every((l) => l.status === "WON" || l.status === "VOID")) {
+      // All resolved, none lost → win. VOID legs count as ×1 (push).
+      const combo = parlay.legs.reduce((p, l) => p * (l.status === "VOID" ? 1 : l.multiplier), 1);
+      await db.parlay.update({
+        where: { id: parlay.id },
+        data: { status: "WON", payout: Math.round(parlay.stake * combo) },
+      });
+      await db.user.update({
+        where: { id: parlay.userId },
+        data: { bettingBalance: { increment: Math.round(parlay.stake * combo) } },
+      });
+      settledParlays++;
+    }
+    // else: still has OPEN legs → leave the parlay OPEN.
+  }
+  if (legs.length) console.log(`  ✓ parlays: ${legs.length} legs, ${settledParlays} parlays settled on fixture ${fixture.apiFixtureId}`);
+  return settledParlays;
 }
 
 /** Settle bets for every finished fixture (stats assumed already written). */
@@ -166,6 +249,8 @@ export async function settleAllBets(): Promise<void> {
   for (const f of finished) {
     try {
       total += await settleFixtureBets(f.id);
+      await settlePlayerPropBets(f.id);
+      await settleParlayLegs(f.id);
     } catch (e) {
       console.error(`✗ bets fixture ${f.apiFixtureId}:`, (e as Error).message);
     }
@@ -189,8 +274,20 @@ export async function settleAllFinished() {
 // so other scripts that merely import it (e.g. *-settle.ts) don't trigger it.
 if (/(^|\/)settle\.(ts|js)$/.test(process.argv[1] ?? "")) {
   const arg = process.argv[2];
+  // `npm run settle -- merge-budgets` → credit leftover squad budget into the
+  // betting bank once the group stage is over (run once at the transition).
+  const mergeBudgets = async () => {
+    const { groupStageOver, mergeSquadBudgetsToBank } = await import("@/lib/budget-merge");
+    if (!(await groupStageOver())) {
+      console.log("Group stage not over yet — no budgets merged.");
+      return;
+    }
+    const r = await mergeSquadBudgetsToBank();
+    console.log(`✓ merged leftover squad budget for ${r.merged} users (£${r.totalCredited.toLocaleString("en-GB")} credited)`);
+  };
   const run =
     arg === "bets" ? settleAllBets
+    : arg === "merge-budgets" ? mergeBudgets
     : arg ? () => settleFixture(Number(arg))
     : settleAllFinished;
   run()

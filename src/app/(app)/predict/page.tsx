@@ -14,14 +14,14 @@ import {
   type MarketType,
 } from "@/lib/betting";
 import { judgementScorerOdds } from "@/lib/scorer-odds";
-import { PredictClient, type BetView, type FixtureMarketsView } from "./PredictClient";
+import { PredictClient, type BetView, type FixtureMarketsView, type ParlayView } from "./PredictClient";
 import type { H2HChallengeView } from "./H2HClient";
 
 export const dynamic = "force-dynamic";
 
 const MAX_FIXTURES = 10;
 const SCORERS_PER_TEAM = 3;
-const CARDS_PER_TEAM = 2;
+const CARDS_PER_TEAM = 3; // match scorer/assist so every market shows 3 per team
 
 const MARKET_LABEL: Record<MarketType, string> = {
   MATCH_RESULT: "Match Result",
@@ -237,6 +237,51 @@ export default async function PredictPage() {
     };
   });
 
+  // Parlays (accumulators) for My Bets.
+  const rawParlays = user
+    ? await db.parlay.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          legs: {
+            include: {
+              fixture: {
+                select: {
+                  homeTeam: { select: { name: true } },
+                  awayTeam: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      })
+    : [];
+  // Resolve player names for any player-prop legs.
+  const parlayPropIds = rawParlays
+    .flatMap((p) => p.legs)
+    .map((l) => l.selection.split(":"))
+    .filter(([kind, id]) => id && (kind === "scorer" || kind === "assist" || kind === "card"))
+    .map(([, id]) => id);
+  const parlayPropPlayers = parlayPropIds.length
+    ? await db.player.findMany({ where: { id: { in: parlayPropIds } }, select: { id: true, name: true } })
+    : [];
+  const parlayNames = new Map([...playerNames, ...parlayPropPlayers.map((p) => [p.id, p.name] as const)]);
+
+  const parlays: ParlayView[] = rawParlays.map((p) => ({
+    id: p.id,
+    stake: p.stake,
+    multiplier: p.multiplier,
+    status: p.status,
+    payout: p.payout,
+    legs: p.legs.map((l) => ({
+      pick: describePick(l.selection, l.fixture.homeTeam.name, l.fixture.awayTeam.name, parlayNames),
+      market: MARKET_LABEL[l.marketType],
+      match: `${l.fixture.homeTeam.name} v ${l.fixture.awayTeam.name}`,
+      multiplier: l.multiplier,
+      status: l.status,
+    })),
+  }));
+
   // H2H challenges for the current user (as creator or opponent).
   const rawH2H = user
     ? await db.h2HChallenge.findMany({
@@ -300,6 +345,7 @@ export default async function PredictPage() {
     <PredictClient
       markets={markets}
       bets={bets}
+      parlays={parlays}
       balance={balance}
       h2hChallenges={h2hChallenges}
       userId={user?.id ?? ""}

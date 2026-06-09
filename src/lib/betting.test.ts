@@ -104,12 +104,14 @@ test("availableBalance: mixed ledger and default starting balance", () => {
 });
 
 test("canPlaceBet: can't stake more than balance, must be a positive integer", () => {
-  assert.equal(canPlaceBet(100, 900), true);
-  assert.equal(canPlaceBet(900, 900), true); // exactly the balance is fine
-  assert.equal(canPlaceBet(901, 900), false); // over balance
-  assert.equal(canPlaceBet(0, 900), false); // below MIN_STAKE
-  assert.equal(canPlaceBet(-10, 900), false);
-  assert.equal(canPlaceBet(10.5, 900), false); // fractional
+  const bal = 900_000;
+  assert.equal(canPlaceBet(50_000, bal), true); // exactly MIN_STAKE
+  assert.equal(canPlaceBet(bal, bal), true); // exactly the balance is fine
+  assert.equal(canPlaceBet(bal + 1, bal), false); // over balance
+  assert.equal(canPlaceBet(0, bal), false); // below MIN_STAKE
+  assert.equal(canPlaceBet(49_999, bal), false); // just under MIN_STAKE
+  assert.equal(canPlaceBet(-10, bal), false);
+  assert.equal(canPlaceBet(50_000.5, bal), false); // fractional
 });
 
 test("matchMarkets: 3 groups, stable selection keys", () => {
@@ -183,10 +185,10 @@ test("money balance: availableBalance uses STARTING_MONEY correctly", () => {
 });
 
 test("money balance: can't stake more than bettingBalance", () => {
-  const balance = 350;
-  assert.equal(canPlaceBet(350, balance), true);  // exact balance is fine
-  assert.equal(canPlaceBet(351, balance), false); // one over
-  assert.equal(canPlaceBet(0, balance), false);   // zero stake
+  const balance = 350_000;
+  assert.equal(canPlaceBet(350_000, balance), true);  // exact balance is fine
+  assert.equal(canPlaceBet(350_001, balance), false); // one over
+  assert.equal(canPlaceBet(0, balance), false);       // zero stake
 });
 
 test("money payout rounding: £ amounts behave identically to points math", () => {

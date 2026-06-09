@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { potentialReturn, type MarketType } from "@/lib/betting";
+import { potentialReturn, MIN_STAKE, type MarketType } from "@/lib/betting";
 import { Flag } from "@/components/Flag";
-import { placeBet } from "./actions";
+import { placeParlay, placeSingles } from "./actions";
 import { H2HClient, type H2HChallengeView } from "./H2HClient";
 import { createH2HFromMarket } from "./h2h-actions";
 
@@ -47,6 +47,21 @@ export interface BetView {
   status: "OPEN" | "WON" | "LOST" | "VOID";
   payout: number | null;
 }
+export interface ParlayLegView {
+  pick: string;
+  market: string;
+  match: string;
+  multiplier: number;
+  status: "OPEN" | "WON" | "LOST" | "VOID";
+}
+export interface ParlayView {
+  id: string;
+  stake: number;
+  multiplier: number;
+  status: "OPEN" | "WON" | "LOST" | "VOID";
+  payout: number | null;
+  legs: ParlayLegView[];
+}
 
 interface SlipState {
   fixtureId: string;
@@ -58,6 +73,28 @@ interface SlipState {
   selection: string;
   multiplier: number;
 }
+
+type SlipLeg = SlipState & { key: string };
+
+const RESULT_MARKETS: MarketType[] = ["MATCH_RESULT", "OVER_UNDER", "BTTS"];
+const isResultMarket = (m: MarketType) => RESULT_MARKETS.includes(m);
+// Unique key per (fixture, market, pick) for toggle/dedupe.
+const legKeyOf = (s: SlipState) => `${s.fixtureId}|${s.marketType}|${s.selection}`;
+
+// Stake scale — the betting bank is the £5M stipend, so stakes are sized in
+// hundred-thousands, not pounds. MIN_STAKE is the canonical server value; the
+// step + quick chips below match it.
+const STAKE_STEP = 50_000;
+const STAKE_CHIPS = [50_000, 100_000, 500_000]; // + "Max"
+// Round a typed value to the nearest valid step, clamped to [MIN_STAKE, max].
+const snapStake = (v: number, max: number) => {
+  if (v <= 0) return 0;
+  const snapped = Math.round(v / STAKE_STEP) * STAKE_STEP;
+  return Math.max(MIN_STAKE, Math.min(max, snapped));
+};
+// Compact chip label: 50_000 → "50k", 1_000_000 → "1M".
+const fmtChip = (v: number) =>
+  v >= 1_000_000 ? `${v / 1_000_000}M` : `${Math.round(v / 1000)}k`;
 
 function MatchTitle({ home, away, size = 20 }: { home: TeamView; away: TeamView; size?: number }) {
   return (
@@ -85,6 +122,7 @@ function Chevron({ open }: { open: boolean }) {
 export function PredictClient({
   markets,
   bets,
+  parlays = [],
   balance,
   h2hChallenges = [],
   userId = "",
@@ -92,34 +130,51 @@ export function PredictClient({
 }: {
   markets: FixtureMarketsView[];
   bets: BetView[];
+  parlays?: ParlayView[];
   balance: number;
   h2hChallenges?: H2HChallengeView[];
   userId?: string;
   leagueMembers?: LeagueMemberView[];
 }) {
   const [tab, setTab] = useState<"markets" | "mybets" | "h2h">("markets");
-  // pendingSlip: user clicked a market option — show the type picker first
-  const [pendingSlip, setPendingSlip] = useState<SlipState | null>(null);
-  // slip: confirmed "vs House" — show BetSlip
-  const [slip, setSlip] = useState<SlipState | null>(null);
-  // challengeSlip: confirmed "vs Friend" — show ChallengeModal
+  // The accumulator bet slip: legs the user has tapped (vs House).
+  const [legs, setLegs] = useState<SlipLeg[]>([]);
+  const [slipOpen, setSlipOpen] = useState(true);
+  // challengeSlip: a single selection sent to "Challenge a Friend".
   const [challengeSlip, setChallengeSlip] = useState<SlipState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const open = bets.filter((b) => b.status === "OPEN");
   const settled = bets.filter((b) => b.status !== "OPEN");
 
-  function pickOption(s: SlipState) {
-    // If no league members, skip the type picker and go straight to BetSlip
-    if (!leagueMembers.length) { setSlip(s); return; }
-    setPendingSlip(s);
+  const flash = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2600);
+  };
+
+  // Tap an odds button → toggle it in the slip. Result markets (1X2/OU/BTTS) are
+  // mutually exclusive per fixture (a new pick replaces the prior one).
+  function toggleLeg(s: SlipState) {
+    const key = legKeyOf(s);
+    setLegs((prev) => {
+      if (prev.some((l) => l.key === key)) return prev.filter((l) => l.key !== key);
+      let next = prev;
+      if (isResultMarket(s.marketType)) {
+        next = prev.filter((l) => !(l.fixtureId === s.fixtureId && l.marketType === s.marketType));
+      }
+      setSlipOpen(true);
+      return [...next, { key, ...s }];
+    });
   }
+  const removeLeg = (key: string) => setLegs((prev) => prev.filter((l) => l.key !== key));
+  const clearLegs = () => setLegs([]);
+  const activeKeys = new Set(legs.map((l) => l.key));
 
   return (
     <div className="screen">
       <div className="screen-head head-row">
         <div>
-          <h1>Predictions</h1>
+          <h1>Bets</h1>
           <div className="sub">
             Stake your virtual £ bank on match markets. Win big, spend winnings in the Store.
           </div>
@@ -153,40 +208,33 @@ export function PredictClient({
           {markets.length === 0 ? (
             <Empty title="No open markets" sub="Markets appear here for upcoming fixtures." />
           ) : (
-            markets.map((m) => <FixtureCard key={m.fixtureId} m={m} onPick={pickOption} />)
+            markets.map((m) => (
+              <FixtureCard key={m.fixtureId} m={m} onPick={toggleLeg} activeKeys={activeKeys} />
+            ))
           )}
         </div>
       ) : tab === "mybets" ? (
-        <MyBets open={open} settled={settled} />
+        <MyBets open={open} settled={settled} parlays={parlays} />
       ) : (
         <H2HClient challenges={h2hChallenges} userId={userId} />
       )}
 
-      {/* Step 1: choose bet type */}
-      {pendingSlip && (
-        <BetTypeModal
-          slip={pendingSlip}
-          onHouse={() => { setSlip(pendingSlip); setPendingSlip(null); }}
-          onFriend={() => { setChallengeSlip(pendingSlip); setPendingSlip(null); }}
-          onClose={() => setPendingSlip(null)}
-        />
-      )}
-
-      {/* Step 2a: vs House */}
-      {slip && (
+      {/* Floating accumulator bet slip (vs House). */}
+      {tab === "markets" && (
         <BetSlip
-          slip={slip}
+          legs={legs}
           balance={balance}
-          onClose={() => setSlip(null)}
-          onPlaced={(msg) => {
-            setSlip(null);
-            setToast(msg);
-            setTimeout(() => setToast(null), 2600);
-          }}
+          open={slipOpen}
+          setOpen={setSlipOpen}
+          removeLeg={removeLeg}
+          clear={clearLegs}
+          canChallenge={leagueMembers.length > 0}
+          onChallenge={(leg) => setChallengeSlip(leg)}
+          onPlaced={(msg) => { clearLegs(); flash(msg); }}
         />
       )}
 
-      {/* Step 2b: vs Friend */}
+      {/* Challenge a single selection vs a friend (H2H). */}
       {challengeSlip && (
         <ChallengeModal
           slip={challengeSlip}
@@ -194,8 +242,7 @@ export function PredictClient({
           onClose={() => setChallengeSlip(null)}
           onSent={(msg) => {
             setChallengeSlip(null);
-            setToast(msg);
-            setTimeout(() => setToast(null), 2600);
+            flash(msg);
           }}
         />
       )}
@@ -214,7 +261,15 @@ export function PredictClient({
 
 // ─── Fixture accordion card ───────────────────────────────────────────────────
 
-function FixtureCard({ m, onPick }: { m: FixtureMarketsView; onPick: (s: SlipState) => void }) {
+function FixtureCard({
+  m,
+  onPick,
+  activeKeys,
+}: {
+  m: FixtureMarketsView;
+  onPick: (s: SlipState) => void;
+  activeKeys: Set<string>;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -239,7 +294,7 @@ function FixtureCard({ m, onPick }: { m: FixtureMarketsView; onPick: (s: SlipSta
           style={{ borderColor: "var(--line)" }}
         >
           {m.groups.map((g) => (
-            <MarketGroup key={g.label} g={g} fixture={m} onPick={onPick} />
+            <MarketGroup key={g.label} g={g} fixture={m} onPick={onPick} activeKeys={activeKeys} />
           ))}
         </div>
       )}
@@ -259,10 +314,12 @@ function MarketGroup({
   g,
   fixture,
   onPick,
+  activeKeys,
 }: {
   g: MarketGroupView;
   fixture: FixtureMarketsView;
   onPick: (s: SlipState) => void;
+  activeKeys: Set<string>;
 }) {
   const [open, setOpen] = useState(true);
   // Picker context: which team's full squad to browse for this player market.
@@ -296,19 +353,25 @@ function MarketGroup({
       </button>
       {open && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {[...g.options, ...extras].map((o) => (
-            <button
-              key={o.selection}
-              onClick={() => onPick(betFor(o))}
-              className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-[var(--accent)]"
-              style={{ background: "var(--surface-2)", borderColor: "var(--line-2)" }}
-            >
-              <span className="truncate text-[13px] font-semibold">{o.name}</span>
-              <span className="num text-sm font-bold" style={{ color: "var(--accent)" }}>
-                {o.multiplier.toFixed(2)}
-              </span>
-            </button>
-          ))}
+          {[...g.options, ...extras].map((o) => {
+            const on = activeKeys.has(legKeyOf(betFor(o)));
+            return (
+              <button
+                key={o.selection}
+                onClick={() => onPick(betFor(o))}
+                className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors"
+                style={{
+                  background: on ? "color-mix(in srgb, var(--accent) 16%, var(--surface-2))" : "var(--surface-2)",
+                  borderColor: on ? "var(--accent)" : "var(--line-2)",
+                }}
+              >
+                <span className="truncate text-[13px] font-semibold">{o.name}</span>
+                <span className="num text-sm font-bold" style={{ color: "var(--accent)" }}>
+                  {o.multiplier.toFixed(2)}
+                </span>
+              </button>
+            );
+          })}
           {/* "+ Other" — one per team, only for player markets. */}
           {kind && (
             <>
@@ -453,209 +516,207 @@ function TeamMarketPicker({
   );
 }
 
-// ─── Bet type picker ──────────────────────────────────────────────────────────
-
-function BetTypeModal({
-  slip,
-  onHouse,
-  onFriend,
-  onClose,
-}: {
-  slip: SlipState;
-  onHouse: () => void;
-  onFriend: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-40 flex items-end justify-center p-4 sm:items-center"
-      style={{ background: "rgba(0,0,0,0.6)" }}
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl border p-5"
-        style={{ background: "var(--surface)", borderColor: "var(--line-2)" }}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-[family-name:var(--font-display)] text-lg font-extrabold">Place a Bet</h3>
-          <button onClick={onClose} style={{ color: "var(--text-3)" }} aria-label="Close">✕</button>
-        </div>
-
-        <div className="mb-4 flex justify-center">
-          <MatchTitle home={slip.home} away={slip.away} size={18} />
-        </div>
-
-        <div
-          className="mb-5 flex items-center justify-between gap-3 rounded-xl border p-3"
-          style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}
-        >
-          <div>
-            <div className="text-xs" style={{ color: "var(--text-3)" }}>{slip.marketLabel}</div>
-            <div className="font-extrabold">{slip.pick}</div>
-          </div>
-          <span
-            className="num rounded-full px-2.5 py-1 text-sm font-bold"
-            style={{ background: "rgba(61,165,255,0.16)", color: "var(--blue)" }}
-          >
-            {slip.multiplier.toFixed(2)}
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={onHouse}
-            className="w-full rounded-xl py-3 text-sm font-extrabold"
-            style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
-          >
-            Bet vs House
-          </button>
-          <button
-            onClick={onFriend}
-            className="w-full rounded-xl border py-3 text-sm font-extrabold transition-colors hover:border-[var(--accent)]"
-            style={{ borderColor: "var(--line)", color: "var(--text)" }}
-          >
-            Challenge a Friend ⚔
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Bet slip (vs house) ──────────────────────────────────────────────────────
+// ─── Floating accumulator bet slip (vs House) ─────────────────────────────────
 
 function BetSlip({
-  slip,
+  legs,
   balance,
-  onClose,
+  open,
+  setOpen,
+  removeLeg,
+  clear,
+  canChallenge,
+  onChallenge,
   onPlaced,
 }: {
-  slip: SlipState;
+  legs: SlipLeg[];
   balance: number;
-  onClose: () => void;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  removeLeg: (key: string) => void;
+  clear: () => void;
+  canChallenge: boolean;
+  onChallenge: (leg: SlipLeg) => void;
   onPlaced: (msg: string) => void;
 }) {
-  const [stake, setStake] = useState(Math.min(1000, balance));
+  const [mode, setMode] = useState<"parlay" | "singles">("singles");
+  const [stake, setStake] = useState(MIN_STAKE);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const router = useRouter();
 
-  const ret = potentialReturn(stake, slip.multiplier);
-  const tooHigh = stake > balance;
-  const valid = stake >= 1 && !tooHigh;
+  // Clear a stale placement error when the selection or mode changes.
+  useEffect(() => setError(null), [legs.length, mode]);
 
-  function confirm() {
+  const combo = legs.reduce((p, l) => p * l.multiplier, 1);
+  if (legs.length === 0) return null;
+  const multi = legs.length > 1;
+  // The user's chosen mode drives the slip. A parlay needs 2+ legs, so with one
+  // leg on the Parlay tab we prompt to add another rather than placing.
+  const effMode = mode;
+  const needsMoreForParlay = effMode === "parlay" && !multi;
+  const maxStake = effMode === "singles" ? Math.floor(balance / legs.length) : balance;
+  const totalStake = effMode === "singles" ? stake * legs.length : stake;
+  const ret =
+    effMode === "singles"
+      ? legs.reduce((s, l) => s + Math.round(stake * l.multiplier), 0)
+      : Math.round(stake * combo);
+  const tooHigh = totalStake > balance || stake < MIN_STAKE;
+
+  function place() {
     setError(null);
+    const slipLegs = legs.map((l) => ({
+      fixtureId: l.fixtureId,
+      marketType: l.marketType,
+      selection: l.selection,
+      pick: l.pick,
+      multiplier: l.multiplier,
+    }));
+    // A single selection (or "Singles" mode) places as separate bets;
+    // only a 2+-leg "Parlay" goes through placeParlay.
+    const asParlay = effMode === "parlay" && multi;
     startTransition(async () => {
-      const res = await placeBet({
-        fixtureId: slip.fixtureId,
-        marketType: slip.marketType,
-        selection: slip.selection,
-        multiplier: slip.multiplier,
-        stake,
-      });
+      const res = asParlay
+        ? await placeParlay(slipLegs, stake)
+        : await placeSingles(slipLegs, stake);
       if (res.ok) {
-        router.refresh();
-        onPlaced(`Bet placed · £${stake.toLocaleString("en-GB")} staked`);
+        onPlaced(
+          asParlay
+            ? `Parlay placed · £${stake.toLocaleString("en-GB")}`
+            : legs.length > 1
+              ? `${legs.length} singles placed · £${totalStake.toLocaleString("en-GB")}`
+              : `Bet placed · £${stake.toLocaleString("en-GB")}`,
+        );
       } else {
         setError(res.error);
       }
     });
   }
 
+  // Collapsed pill.
+  if (!open) {
+    return (
+      <button
+        className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full border px-4 py-3 text-sm font-bold shadow-lg"
+        style={{ background: "var(--surface-3)", borderColor: "var(--accent)", color: "var(--text)" }}
+        onClick={() => setOpen(true)}
+      >
+        <span style={{ color: "var(--accent)" }}>⚽</span>
+        {legs.length} {multi ? "selections" : "selection"}
+        <span className="num" style={{ color: "var(--accent)" }}>@{combo.toFixed(2)}</span>
+      </button>
+    );
+  }
+
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center p-4 sm:items-center"
-      style={{ background: "rgba(0,0,0,0.6)" }}
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed bottom-5 right-5 z-50 flex w-[372px] max-w-[calc(100vw-2rem)] flex-col rounded-2xl border shadow-2xl"
+      style={{ background: "var(--surface)", borderColor: "var(--line-2)", maxHeight: "min(78vh, 640px)" }}
     >
-      <div
-        className="w-full max-w-md rounded-2xl border p-5"
-        style={{ background: "var(--surface)", borderColor: "var(--line-2)" }}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-[family-name:var(--font-display)] text-xl font-extrabold">Place Bet</h3>
-          <button onClick={onClose} style={{ color: "var(--text-3)" }} aria-label="Close">✕</button>
+      {/* head */}
+      <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--line)" }}>
+        <div className="flex items-center gap-2 font-bold">
+          <span style={{ color: "var(--accent)" }}>⚽</span>
+          Bet Slip
+          <span className="pill" style={{ background: "var(--surface-3)", padding: "1px 8px", borderRadius: 999, fontSize: 12 }}>{legs.length}</span>
         </div>
-
-        <div className="mb-3 flex justify-center">
-          <MatchTitle home={slip.home} away={slip.away} size={18} />
+        <div className="flex items-center gap-1">
+          <button className="text-xs font-semibold" style={{ color: "var(--text-3)" }} onClick={clear}>Clear</button>
+          <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Collapse" style={{ color: "var(--text-3)", padding: 4 }}>▾</button>
         </div>
+      </div>
 
-        <div
-          className="mb-4 flex items-center justify-between gap-3 rounded-xl border p-3"
-          style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}
-        >
-          <div>
-            <div className="text-xs" style={{ color: "var(--text-3)" }}>{slip.marketLabel}</div>
-            <div className="text-base font-extrabold">{slip.pick}</div>
+      {/* parlay/singles toggle — always visible so Parlay is a discoverable feature */}
+      <div className="px-4 pt-3">
+        <Segmented
+          value={mode}
+          onChange={setMode}
+          options={[{ value: "singles", label: "Singles" }, { value: "parlay", label: "Parlay" }]}
+        />
+      </div>
+
+      {/* legs */}
+      <div className="flex-1 overflow-y-auto px-3 py-3" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {legs.map((l) => (
+          <div key={l.key} className="flex items-center gap-2 rounded-lg border px-3 py-2"
+            style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-bold">{l.pick}</div>
+              <div className="truncate text-[11px]" style={{ color: "var(--text-3)" }}>
+                {l.home.name} v {l.away.name} · {l.marketLabel}
+              </div>
+            </div>
+            <span className="num text-sm font-bold" style={{ color: "var(--accent)" }}>{l.multiplier.toFixed(2)}</span>
+            {canChallenge && (
+              <button title="Challenge a friend" onClick={() => onChallenge(l)}
+                style={{ color: "var(--text-3)", fontSize: 13, padding: "0 2px" }}>⚔</button>
+            )}
+            <button onClick={() => removeLeg(l.key)} aria-label="Remove" style={{ color: "var(--text-3)", padding: "0 2px" }}>✕</button>
           </div>
-          <span
-            className="num rounded-full px-2.5 py-1 text-sm font-bold"
-            style={{ background: "rgba(61,165,255,0.16)", color: "var(--blue)" }}
-          >
-            {slip.multiplier.toFixed(2)}
-          </span>
-        </div>
+        ))}
+      </div>
 
-        <label className="mb-1.5 block text-xs font-bold" style={{ color: "var(--text-2)" }}>
-          Stake (£)
-        </label>
-        <div
-          className="flex items-center gap-2 rounded-xl border px-3 py-2"
-          style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}
-        >
-          <span className="font-bold" style={{ color: "var(--accent)" }}>£</span>
-          <input
-            type="number"
-            value={stake}
-            min={1}
-            max={balance}
-            onChange={(e) => setStake(Math.max(0, Math.min(balance, Math.trunc(+e.target.value || 0))))}
-            className="num w-full bg-transparent text-base font-bold outline-none"
-            style={{ color: "var(--text)" }}
-          />
-        </div>
-        <div className="mt-2 flex gap-2">
-          {[1000, 10000, 100000, balance].map((v, i) => (
-            <button
-              key={i}
-              onClick={() => setStake(Math.min(balance, v))}
-              className="num rounded-lg border px-3 py-1 text-[13px] font-bold"
-              style={{ background: "var(--surface-2)", borderColor: "var(--line)", color: "var(--text-2)" }}
-            >
-              {i === 3 ? "Max" : `${(v / 1000).toFixed(0)}k`}
-            </button>
-          ))}
-        </div>
-
-        <div className="my-4 rounded-xl p-3" style={{ background: "var(--surface-2)" }}>
-          <div className="flex items-center justify-between">
-            <span className="text-sm" style={{ color: "var(--text-2)" }}>Potential return</span>
-            <span className="num text-lg font-extrabold" style={{ color: "var(--accent)" }}>{ret}</span>
-          </div>
-          <div className="mt-1 flex items-center justify-between">
-            <span className="text-sm" style={{ color: "var(--text-2)" }}>Profit</span>
-            <span className="num font-bold">+{ret - stake}</span>
-          </div>
-        </div>
-
-        {(tooHigh || error) && (
-          <div
-            className="mb-3 rounded-lg px-3 py-2 text-sm"
-            style={{ background: "rgba(255,77,94,0.12)", color: "var(--live)" }}
-          >
-            {error ?? "Stake exceeds your balance."}
+      {/* foot */}
+      <div className="border-t px-4 py-3" style={{ borderColor: "var(--line)" }}>
+        {effMode === "parlay" && multi && (
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span style={{ color: "var(--text-3)" }}>{legs.length}-leg parlay</span>
+            <span className="num font-extrabold" style={{ color: "var(--accent)" }}>@{combo.toFixed(2)}</span>
           </div>
         )}
-
+        <div className="mb-2 flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: "var(--line-2)" }}>
+          <span style={{ color: "var(--gold)" }}>£</span>
+          <input
+            type="number" value={stake} min={MIN_STAKE} max={maxStake} step={STAKE_STEP}
+            onChange={(e) => setStake(snapStake(Number(e.target.value) || 0, maxStake))}
+            className="num w-full bg-transparent outline-none"
+          />
+          <span className="text-xs" style={{ color: "var(--text-3)" }}>{effMode === "singles" ? "/ leg" : "stake"}</span>
+        </div>
+        <div className="mb-2 flex gap-1.5">
+          {[...STAKE_CHIPS, maxStake].map((v, i) => {
+            const isMax = i === STAKE_CHIPS.length;
+            return (
+              <button key={i} onClick={() => setStake(isMax ? maxStake : Math.min(v, maxStake))}
+                className="flex-1 rounded-md border py-1 text-xs font-semibold"
+                style={{ borderColor: "var(--line-2)", color: "var(--text-2)" }}>
+                {isMax ? "Max" : fmtChip(v)}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs" style={{ color: "var(--text-3)" }}>
+            {effMode === "singles" && multi ? "Total return (if all win)" : "Potential return"}
+          </span>
+          <span className="num text-lg font-extrabold" style={{ color: "var(--accent)" }}>
+            £{ret.toLocaleString("en-GB")}
+          </span>
+        </div>
+        {needsMoreForParlay ? (
+          <div className="mb-2 text-xs font-semibold" style={{ color: "var(--gold)" }}>
+            Tap another selection to build a parlay, or switch to Singles to place this one.
+          </div>
+        ) : (
+          (error || tooHigh) && (
+            <div className="mb-2 text-xs font-semibold" style={{ color: "var(--live)" }}>
+              {error ?? (stake < MIN_STAKE ? `Minimum stake is £${MIN_STAKE.toLocaleString("en-GB")}.` : "Total stake exceeds your balance.")}
+            </div>
+          )
+        )}
         <button
-          disabled={!valid || pending}
-          onClick={confirm}
-          className="w-full rounded-xl py-3 text-sm font-extrabold transition-opacity disabled:opacity-50"
-          style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+          className="btn btn-primary btn-block"
+          disabled={tooHigh || pending || needsMoreForParlay}
+          onClick={place}
         >
-          {pending ? "Placing…" : `Confirm Bet · £${stake.toLocaleString("en-GB")}`}
+          {pending
+            ? "Placing…"
+            : needsMoreForParlay
+              ? "Add another selection"
+              : effMode === "singles"
+                ? legs.length > 1
+                  ? `Place ${legs.length} singles · £${totalStake.toLocaleString("en-GB")}`
+                  : `Place bet · £${stake.toLocaleString("en-GB")}`
+                : `Place parlay · £${stake.toLocaleString("en-GB")}`}
         </button>
       </div>
     </div>
@@ -813,24 +874,73 @@ function ChallengeModal({
 
 // ─── My Bets ──────────────────────────────────────────────────────────────────
 
-function MyBets({ open, settled }: { open: BetView[]; settled: BetView[] }) {
-  if (!open.length && !settled.length) {
+function MyBets({
+  open,
+  settled,
+  parlays = [],
+}: {
+  open: BetView[];
+  settled: BetView[];
+  parlays?: ParlayView[];
+}) {
+  const openParlays = parlays.filter((p) => p.status === "OPEN");
+  const settledParlays = parlays.filter((p) => p.status !== "OPEN");
+  if (!open.length && !settled.length && !parlays.length) {
     return <Empty title="No bets yet" sub="Head to Markets and stake some points on an upcoming match." />;
   }
   return (
     <div className="mt-4">
-      {open.length > 0 && (
+      {(open.length > 0 || openParlays.length > 0) && (
         <>
           <div className="mb-2.5 text-sm font-bold" style={{ color: "var(--text-2)" }}>Open bets</div>
+          {openParlays.map((p) => <ParlayRow key={p.id} p={p} />)}
           {open.map((b) => <BetRow key={b.id} b={b} />)}
         </>
       )}
-      {settled.length > 0 && (
+      {(settled.length > 0 || settledParlays.length > 0) && (
         <>
           <div className="mb-2.5 mt-5 text-sm font-bold" style={{ color: "var(--text-2)" }}>Settled</div>
+          {settledParlays.map((p) => <ParlayRow key={p.id} p={p} />)}
           {settled.map((b) => <BetRow key={b.id} b={b} />)}
         </>
       )}
+    </div>
+  );
+}
+
+function ParlayRow({ p }: { p: ParlayView }) {
+  const accent =
+    p.status === "WON" ? "var(--accent)" : p.status === "LOST" ? "var(--live)" : "var(--text-2)";
+  const potential = Math.round(p.stake * p.multiplier);
+  return (
+    <div className="mb-2 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--line)" }}>
+      <div className="flex items-center justify-between border-b px-3 py-2" style={{ borderColor: "var(--line)" }}>
+        <span className="flex items-center gap-2 text-[13px] font-bold">
+          <span className="rounded px-2 py-0.5 text-[11px] font-bold" style={{ background: "color-mix(in srgb, var(--gold) 18%, transparent)", color: "var(--gold)" }}>
+            {p.legs.length}-LEG PARLAY
+          </span>
+          <span className="num" style={{ color: "var(--text-3)" }}>@{p.multiplier.toFixed(2)}</span>
+        </span>
+        <span className="num text-[13px] font-bold" style={{ color: accent }}>
+          {p.status === "OPEN" ? `Open · £${potential.toLocaleString("en-GB")}` : p.status === "WON" ? `+£${(p.payout ?? 0).toLocaleString("en-GB")}` : p.status === "VOID" ? "Void" : "Lost"}
+        </span>
+      </div>
+      <div className="px-3 py-2" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {p.legs.map((l, i) => {
+          const dot = l.status === "WON" ? "var(--accent)" : l.status === "LOST" ? "var(--live)" : "var(--text-3)";
+          return (
+            <div key={i} className="flex items-center gap-2 text-[12px]">
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: dot, flexShrink: 0 }} />
+              <span className="font-semibold">{l.pick}</span>
+              <span style={{ color: "var(--text-3)" }} className="truncate">· {l.match} · {l.market}</span>
+              <span className="num ml-auto" style={{ color: "var(--text-3)" }}>{l.multiplier.toFixed(2)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="border-t px-3 py-1.5 text-[11px]" style={{ borderColor: "var(--line)", color: "var(--text-3)" }}>
+        Stake £{p.stake.toLocaleString("en-GB")} · all legs must win
+      </div>
     </div>
   );
 }

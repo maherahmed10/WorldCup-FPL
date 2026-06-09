@@ -71,10 +71,11 @@ model User {
   email          String   @unique
   name           String
   teamName       String?
-  bettingBalance    Int      @default(5000000) // virtual £ bank — deducted on bet/purchase, credited on win/void
-  squadBudgetBonus  Int      @default(0)       // tenths of a million converted from betting bank after group stage
-  onboardedAt       DateTime? // set when the first-login Welcome guide is dismissed (null = not onboarded yet)
-  createdAt         DateTime @default(now())
+  bettingBalance     Int      @default(5000000) // virtual £ bank — deducted on bet/purchase, credited on win/void
+  squadBudgetBonus   Int      @default(0)       // tenths of a million converted from betting bank after group stage
+  squadBudgetMerged  Boolean  @default(false)   // true once the post-group leftover-squad-budget → bank merge has run
+  onboardedAt        DateTime? // set when the first-login Welcome guide is dismissed (null = not onboarded yet)
+  createdAt          DateTime @default(now())
 
   squads          Squad[]
   bets            Bet[]
@@ -85,6 +86,7 @@ model User {
   h2hReceived     H2HChallenge[] @relation("H2HOpponent")
   h2hWon          H2HChallenge[] @relation("H2HWinner")
   gameweekPicks   GameweekPick[]
+  parlays         Parlay[]
 }
 
 model League {
@@ -201,6 +203,7 @@ model Fixture {
   bets          Bet[]
   odds          FixtureOdds[]
   h2hChallenges H2HChallenge[]
+  parlayLegs    ParlayLeg[]
 
   @@index([kickoff])
   @@index([gameweekId])
@@ -320,6 +323,42 @@ model Bet {
 
   @@index([userId])
   @@index([gameweekId])
+}
+
+// Parlay (accumulator): ONE bet across multiple legs that ALL must win. The
+// combined multiplier is the product of the legs' odds; payout = stake × combo.
+// Settles as each leg's fixture resolves: LOST the moment any leg loses; WON only
+// once every leg has won. (Singles are placed as separate Bet rows, not here.)
+model Parlay {
+  id         String     @id @default(cuid())
+  userId     String     @db.Uuid
+  stake      Int
+  multiplier Float // product of leg multipliers at placement
+  status     BetStatus  @default(OPEN)
+  payout     Int? // set on settle (stake × multiplier if WON, else 0)
+  createdAt  DateTime   @default(now())
+
+  user User        @relation(fields: [userId], references: [id])
+  legs ParlayLeg[]
+
+  @@index([userId])
+}
+
+model ParlayLeg {
+  id         String     @id @default(cuid())
+  parlayId   String
+  fixtureId  String
+  marketType MarketType
+  selection  String // same encoding as Bet.selection (e.g. "HOME", "scorer:<id>")
+  pick       String // human label shown in My Bets (e.g. "Messi", "Over 2.5")
+  multiplier Float
+  status     BetStatus  @default(OPEN) // per-leg resolution
+
+  parlay  Parlay  @relation(fields: [parlayId], references: [id], onDelete: Cascade)
+  fixture Fixture @relation(fields: [fixtureId], references: [id])
+
+  @@index([parlayId])
+  @@index([fixtureId])
 }
 
 // ───────────────────────── Head-to-Head ─────────────────────────
