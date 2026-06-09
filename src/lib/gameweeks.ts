@@ -23,8 +23,13 @@ export interface GameweekDef {
 // Matches the §4 structure. Group stage is split into 3 matchday buckets by
 // calendar window; knockout rounds are one bucket each = one transfer window.
 export const GAMEWEEK_DEFS: GameweekDef[] = [
-  { label: "Group MD1", roundType: "GROUP", startsAt: "2026-06-11", endsAt: "2026-06-17", isKnockout: false },
-  { label: "Group MD2", roundType: "GROUP", startsAt: "2026-06-18", endsAt: "2026-06-23", isKnockout: false },
+  // endsAt is one UTC day past the last local matchday so late-evening North
+  // American kickoffs (e.g. 9 PM ET = next calendar day UTC) fall in the
+  // correct bucket. bucketForKickoff uses find() so the first matching window
+  // wins — MD1 captures June 18 UTC before MD2 can, MD2 captures June 24 UTC
+  // before MD3 can.
+  { label: "Group MD1", roundType: "GROUP", startsAt: "2026-06-11", endsAt: "2026-06-18", isKnockout: false },
+  { label: "Group MD2", roundType: "GROUP", startsAt: "2026-06-18", endsAt: "2026-06-24", isKnockout: false },
   { label: "Group MD3", roundType: "GROUP", startsAt: "2026-06-24", endsAt: "2026-06-27", isKnockout: false },
   { label: "Round of 32", roundType: "R32", startsAt: "2026-06-28", endsAt: "2026-07-03", isKnockout: true },
   { label: "Round of 16", roundType: "R16", startsAt: "2026-07-04", endsAt: "2026-07-07", isKnockout: true },

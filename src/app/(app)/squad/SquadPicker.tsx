@@ -143,6 +143,12 @@ export function SquadPicker({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Transfers (add/remove players) are only allowed during knockout transfer
+  // windows. During the group stage, once a squad exists, the roster is locked —
+  // only formation swaps and captain/vice changes are permitted.
+  const hasExistingSquad = initialStarterIds.length + initialBenchIds.length > 0;
+  const transfersLocked = isGroupStage && hasExistingSquad;
+
   const validation = validateSquad(squad, { maxPerCountry, budgetBonus });
   const byPos = countByPosition(squad);
   const countryCounts = countByCountry(squad);
@@ -285,10 +291,11 @@ export function SquadPicker({
     <div className="screen">
       <div className="screen-head head-row">
         <div>
-          <h1>Pick Your Team</h1>
+          <h1>{transfersLocked ? "Edit Formation" : "Pick Your Team"}</h1>
           <div className="sub">
-            Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap.
-            {gameweekLabel ? ` · ${gameweekLabel}` : ""}
+            {transfersLocked
+              ? "Swap starters and bench, set your captain. Transfers unlock after the group stage."
+              : `Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap.${gameweekLabel ? ` · ${gameweekLabel}` : ""}`}
           </div>
         </div>
         {/* Green + clickable once the squad/formation are valid — clicking
@@ -370,12 +377,32 @@ export function SquadPicker({
               </span>
             )}
           </div>
+          {transfersLocked && (
+            <div
+              className="vmsg"
+              style={{
+                marginBottom: 10,
+                background: "rgba(255,197,61,0.08)",
+                border: "1px solid rgba(255,197,61,0.25)",
+                borderRadius: 10,
+                padding: "9px 12px",
+                fontSize: 12,
+                color: "var(--gold)",
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+              }}
+            >
+              <Icon name="info" size={15} />
+              Transfers are locked during the group stage. You can change formation and captain/vice only.
+            </div>
+          )}
           <div className="pitch-wrap">
             <Pitch
               rows={pitchRows}
               captainId={captainId}
               viceId={viceId}
-              onEmpty={(pos) => setPickerFor({ pos, starter: true })}
+              onEmpty={transfersLocked ? () => {} : (pos) => setPickerFor({ pos, starter: true })}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
               draggedRef={draggedRef}
@@ -392,7 +419,7 @@ export function SquadPicker({
               viceId={viceId}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
-              onAdd={(pos) => setPickerFor({ pos, starter: false })}
+              onAdd={transfersLocked ? () => {} : (pos) => setPickerFor({ pos, starter: false })}
               byPos={byPos}
               draggedRef={draggedRef}
               draggingId={draggingId}
@@ -448,6 +475,7 @@ export function SquadPicker({
             player={p}
             isCaptain={captainId === p.id}
             isVice={viceId === p.id}
+            canRemove={!transfersLocked}
             onViewProfile={() => { setProfileId(p.id); close(); }}
             onCaptain={() => { setCaptainId(p.id); if (viceId === p.id) setViceId(null); close(); }}
             onVice={() => { setViceId(p.id); if (captainId === p.id) setCaptainId(null); close(); }}
@@ -472,6 +500,7 @@ function PlayerActionMenu({
   player,
   isCaptain,
   isVice,
+  canRemove,
   onViewProfile,
   onCaptain,
   onVice,
@@ -482,6 +511,7 @@ function PlayerActionMenu({
   player: SquadEntry;
   isCaptain: boolean;
   isVice: boolean;
+  canRemove: boolean;
   onViewProfile: () => void;
   onCaptain: () => void;
   onVice: () => void;
@@ -515,7 +545,9 @@ function PlayerActionMenu({
           <Item icon="star" label={isCaptain ? "Captain (×2) — selected" : "Make Captain (×2)"} onClick={onCaptain} />
           <Item icon="user" label={isVice ? "Vice-captain — selected" : "Make Vice-captain"} onClick={onVice} />
           <Item icon="swap" label="Substitute" onClick={onSubstitute} />
-          <Item icon="swap" label="Remove from squad" onClick={onRemove} tone="live" />
+          {canRemove && (
+            <Item icon="swap" label="Remove from squad" onClick={onRemove} tone="live" />
+          )}
         </div>
         <div style={{ padding: "0 18px 18px" }}>
           <button className="btn btn-ghost btn-block" onClick={onClose}>Close</button>

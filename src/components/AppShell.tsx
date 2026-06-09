@@ -107,12 +107,6 @@ export function AppShell({
           </div>
         </div>
         <div className="side-foot">
-          <Link href="/squad" className={"nav-item" + (pathname.startsWith("/squad") ? " on" : "")}>
-            <span className="nav-ico">
-              <Icon name="plus" size={20} />
-            </span>
-            Pick / Edit Team
-          </Link>
           <Link href="/transfers" className={"nav-item" + (pathname.startsWith("/transfers") ? " on" : "")}>
             <span className="nav-ico">
               <Icon name="swap" size={20} />

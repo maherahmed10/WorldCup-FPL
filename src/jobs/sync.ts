@@ -97,6 +97,7 @@ export async function syncFixtures() {
         status: STATUS_MAP[f.fixture.status.short] ?? "SCHEDULED",
         homeScore: f.goals.home,
         awayScore: f.goals.away,
+        gameweekId: bucket.label,
       },
       create: {
         apiFixtureId: f.fixture.id,
