@@ -311,6 +311,9 @@ function StandingsTable({
                       {row.name[0]?.toUpperCase()}
                     </div>
                     <span className="truncate text-sm font-medium">
+                      {row.rank === 1 && (
+                        <span className="mr-1" style={{ fontSize: 13 }}>👑</span>
+                      )}
                       {row.name}
                       {isYou && (
                         <span
