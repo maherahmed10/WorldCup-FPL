@@ -3,7 +3,7 @@
 // to the interactive client picker.
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { getCurrentGameweek, getActiveSquad } from "@/lib/squad-data";
+import { getUpcomingDeadlineGameweek, getSquadForEdit, getPickForEdit } from "@/lib/squad-data";
 import { getMaxPerCountry, type PerkLike } from "@/lib/store";
 import { SquadPicker, type PickerPlayer } from "./SquadPicker";
 import { BankConvertCard } from "./BankConvertCard";
@@ -24,7 +24,9 @@ export default async function SquadPage() {
       where: { userId: user.id },
       select: { storeItemId: true, gameweekId: true, usedAt: true },
     }),
-    getCurrentGameweek(),
+    // Edit the NEXT-deadline gameweek (the editable one), not the playing one —
+    // so editing after MD1's deadline targets MD2 and leaves the locked MD1 alone.
+    getUpcomingDeadlineGameweek(),
     db.user.findUnique({ where: { id: user.id }, select: { bettingBalance: true, squadBudgetBonus: true } }),
     db.playerFavourite.findMany({ where: { userId: user.id }, select: { playerId: true } }),
   ]);
@@ -42,15 +44,15 @@ export default async function SquadPage() {
   const isGroupStage = !(gameweek?.isKnockout ?? false);
   const initialFavouriteIds = favouriteRows.map((f) => f.playerId);
 
-  const existing = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
+  // Seed the picker from the upcoming-GW squad if it exists, else carry forward
+  // the most recent squad. The 15 are LOCKED whenever a prior squad exists (only
+  // the first-ever pick is unlocked); the 15 change only via /transfers.
+  const { squad: existing, sourceGameweekId } = gameweek
+    ? await getSquadForEdit(user.id, gameweek.id)
+    : { squad: null, sourceGameweekId: null };
+  const lockRoster = existing !== null;
   const budgetBonus = appUser?.squadBudgetBonus ?? 0;
-  // The per-gameweek captain/vice pick (separate from Squad.captainId).
-  const pick = gameweek
-    ? await db.gameweekPick.findUnique({
-        where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
-        select: { captainId: true, viceId: true },
-      })
-    : null;
+  const pick = await getPickForEdit(user.id, sourceGameweekId);
 
   return (
     <>
@@ -72,6 +74,7 @@ export default async function SquadPage() {
         budgetBonus={budgetBonus}
         ownedPerks={perks}
         isGroupStage={isGroupStage}
+        lockRoster={lockRoster}
         initialFavouriteIds={initialFavouriteIds}
       />
     </>

@@ -49,19 +49,16 @@ export interface LoadedSquad {
   players: Array<SquadPlayer & { name: string; isStarting: boolean }>;
 }
 
-/** Load the user's active squad for a gameweek (most recent valid-from ≤ gw). */
-export async function getActiveSquad(
-  userId: string,
-  gameweekId: string,
-): Promise<LoadedSquad | null> {
-  const squad = await db.squad.findFirst({
-    where: { userId, gameweekId },
-    include: {
-      players: { include: { player: { include: { team: true } } } },
-    },
-  });
-  if (!squad) return null;
-
+// Prisma squad row → our LoadedSquad shape.
+type SquadWithPlayers = {
+  id: string;
+  captainId: string | null;
+  players: Array<{
+    isStarting: boolean;
+    player: { id: string; name: string; position: string; price: number; team: { country: string } };
+  }>;
+};
+function toLoadedSquad(squad: SquadWithPlayers): LoadedSquad {
   return {
     squadId: squad.id,
     captainId: squad.captainId,
@@ -74,6 +71,60 @@ export async function getActiveSquad(
       isStarting: sp.isStarting,
     })),
   };
+}
+
+const SQUAD_INCLUDE = { players: { include: { player: { include: { team: true } } } } } as const;
+
+/** Load the user's active squad for a gameweek (exact (user, gameweek) match). */
+export async function getActiveSquad(
+  userId: string,
+  gameweekId: string,
+): Promise<LoadedSquad | null> {
+  const squad = await db.squad.findFirst({ where: { userId, gameweekId }, include: SQUAD_INCLUDE });
+  return squad ? toLoadedSquad(squad) : null;
+}
+
+/** The user's most recent squad across all gameweeks (for carry-forward seeding). */
+export async function getMostRecentSquad(
+  userId: string,
+): Promise<{ squad: LoadedSquad; gameweekId: string } | null> {
+  const squad = await db.squad.findFirst({
+    where: { userId },
+    include: SQUAD_INCLUDE,
+    orderBy: { gameweek: { startsAt: "desc" } },
+  });
+  return squad ? { squad: toLoadedSquad(squad), gameweekId: squad.gameweekId } : null;
+}
+
+/**
+ * The squad to SEED the picker with for an EDITABLE gameweek. Returns the
+ * upcoming-GW squad if a row already exists for it; otherwise the user's
+ * most-recent prior squad so the team "carries forward" (FPL model). `seeded`
+ * is true when we fell back to a prior GW (no row yet for upcomingGwId), which
+ * means the 15 are inherited and locked. sourceGameweekId tells the caller which
+ * GW the squad (and its captain/vice pick) came from.
+ */
+export async function getSquadForEdit(
+  userId: string,
+  upcomingGwId: string,
+): Promise<{ squad: LoadedSquad | null; seeded: boolean; sourceGameweekId: string | null }> {
+  const exact = await getActiveSquad(userId, upcomingGwId);
+  if (exact) return { squad: exact, seeded: false, sourceGameweekId: upcomingGwId };
+  const recent = await getMostRecentSquad(userId);
+  if (recent) return { squad: recent.squad, seeded: true, sourceGameweekId: recent.gameweekId };
+  return { squad: null, seeded: false, sourceGameweekId: null };
+}
+
+/** The captain/vice pick to seed for editing — from whichever GW the squad came from. */
+export async function getPickForEdit(
+  userId: string,
+  sourceGameweekId: string | null,
+): Promise<{ captainId: string | null; viceId: string | null } | null> {
+  if (!sourceGameweekId) return null;
+  return db.gameweekPick.findUnique({
+    where: { userId_gameweekId: { userId, gameweekId: sourceGameweekId } },
+    select: { captainId: true, viceId: true },
+  });
 }
 
 /** Group starters into Pitch rows (GK→DEF→MID→FWD) for the view. */

@@ -62,6 +62,7 @@ export function SquadPicker({
   budgetBonus = 0,
   ownedPerks = [],
   isGroupStage = true,
+  lockRoster = false,
   initialFavouriteIds = [],
 }: {
   pool: PickerPlayer[];
@@ -75,6 +76,9 @@ export function SquadPicker({
   budgetBonus?: number;
   ownedPerks?: PerkLike[];
   isGroupStage?: boolean;
+  // When true the 15 are LOCKED — only XI reorder + captain/vice are editable
+  // (the 15 change only via /transfers). False only on the first-ever pick.
+  lockRoster?: boolean;
   initialFavouriteIds?: string[];
 }) {
   const router = useRouter();
@@ -143,11 +147,6 @@ export function SquadPicker({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Transfers (add/remove players) are only allowed during knockout transfer
-  // windows. During the group stage, once a squad exists, the roster is locked —
-  // only formation swaps and captain/vice changes are permitted.
-  const hasExistingSquad = initialStarterIds.length + initialBenchIds.length > 0;
-  const transfersLocked = isGroupStage && hasExistingSquad;
 
   const validation = validateSquad(squad, { maxPerCountry, budgetBonus });
   const byPos = countByPosition(squad);
@@ -291,11 +290,12 @@ export function SquadPicker({
     <div className="screen">
       <div className="screen-head head-row">
         <div>
-          <h1>{transfersLocked ? "Edit Formation" : "Pick Your Team"}</h1>
+          <h1>{lockRoster ? "Edit Your Team" : "Pick Your Team"}</h1>
           <div className="sub">
-            {transfersLocked
-              ? "Swap starters and bench, set your captain. Transfers unlock after the group stage."
-              : `Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap.${gameweekLabel ? ` · ${gameweekLabel}` : ""}`}
+            {lockRoster
+              ? "Your 15 are locked — set your starting XI, captain & vice. Change players in Transfers."
+              : "Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap."}
+            {gameweekLabel ? ` · ${gameweekLabel}` : ""}
           </div>
         </div>
         {/* Green + clickable once the squad/formation are valid — clicking
@@ -377,7 +377,7 @@ export function SquadPicker({
               </span>
             )}
           </div>
-          {transfersLocked && (
+          {lockRoster && (
             <div
               className="vmsg"
               style={{
@@ -394,7 +394,7 @@ export function SquadPicker({
               }}
             >
               <Icon name="info" size={15} />
-              Transfers are locked during the group stage. You can change formation and captain/vice only.
+              Your 15 are locked — change your starting XI, captain &amp; vice. Swap players in Transfers.
             </div>
           )}
           <div className="pitch-wrap">
@@ -402,7 +402,7 @@ export function SquadPicker({
               rows={pitchRows}
               captainId={captainId}
               viceId={viceId}
-              onEmpty={transfersLocked ? () => {} : (pos) => setPickerFor({ pos, starter: true })}
+              onEmpty={(pos) => { if (!lockRoster) setPickerFor({ pos, starter: true }); }}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
               draggedRef={draggedRef}
@@ -419,7 +419,7 @@ export function SquadPicker({
               viceId={viceId}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
-              onAdd={transfersLocked ? () => {} : (pos) => setPickerFor({ pos, starter: false })}
+              onAdd={(pos) => { if (!lockRoster) setPickerFor({ pos, starter: false }); }}
               byPos={byPos}
               draggedRef={draggedRef}
               draggingId={draggingId}
@@ -475,7 +475,7 @@ export function SquadPicker({
             player={p}
             isCaptain={captainId === p.id}
             isVice={viceId === p.id}
-            canRemove={!transfersLocked}
+            canRemove={!lockRoster}
             onViewProfile={() => { setProfileId(p.id); close(); }}
             onCaptain={() => { setCaptainId(p.id); if (viceId === p.id) setViceId(null); close(); }}
             onVice={() => { setViceId(p.id); if (captainId === p.id) setCaptainId(null); close(); }}
