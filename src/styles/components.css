@@ -348,3 +348,37 @@
   .pp-mh, .pp-mrow { grid-template-columns: 34px 1fr 24px 22px 22px 32px 34px; gap: 2px; }
   .pp-fix-l { flex-basis: 78px; }
 }
+
+/* Player profile — match-row expandable point breakdown */
+.pp-mrow { width: 100%; background: none; cursor: pointer; text-align: left; color: inherit; font: inherit; transition: background .12s; }
+.pp-mrow:hover { background: var(--surface-2); }
+.pp-mrow.open { background: var(--surface-2); }
+.pp-breakdown { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px 12px; background: var(--surface-2); border-top: 1px dashed var(--line-2); }
+.pp-bd-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+.pp-bd-label { color: var(--text-2); }
+.pp-bd-pts { font-weight: 800; color: var(--accent); }
+.pp-bd-pts.neg { color: var(--live); }
+.pp-bd-total { border-top: 1px solid var(--line); margin-top: 3px; padding-top: 6px; }
+.pp-bd-total .pp-bd-label { font-weight: 800; color: var(--text); }
+.pp-bd-empty { font-size: 12px; color: var(--text-3); padding: 4px 0; }
+
+/* Match-detail mini-pitch (lineups tab) */
+.mini-pitch {
+  position: relative;
+  background: linear-gradient(180deg, #16361f 0%, #122a19 100%);
+  aspect-ratio: 3 / 3.6;
+  padding: 10px 6px;
+}
+.mini-pitch-lines { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; }
+.mini-pitch-rows { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: space-around; }
+.mini-pitch-row { display: flex; justify-content: space-evenly; align-items: center; gap: 4px; }
+.mini-token { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; padding: 2px; min-width: 0; }
+.mini-token:disabled { cursor: default; }
+.mini-token:not(:disabled):hover .mini-token-name { background: var(--accent); color: var(--accent-ink); }
+.mini-token-jersey { line-height: 0; }
+.mini-token-name {
+  font-size: 10px; font-weight: 800; color: var(--text);
+  background: rgba(0,0,0,.55); padding: 1px 5px; border-radius: 5px;
+  max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background .12s, color .12s;
+}

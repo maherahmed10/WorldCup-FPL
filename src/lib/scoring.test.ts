@@ -3,7 +3,7 @@
 // before any feed is wired.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { scoreMatch, scoreSquadGameweek, resolveCaptain, type MatchStatLine } from "./scoring.js";
+import { scoreMatch, scoreSquadGameweek, resolveCaptain, breakdownMatch, eventPoints, type MatchStatLine } from "./scoring.js";
 
 const base: MatchStatLine = {
   position: "MID",
@@ -89,4 +89,31 @@ test("resolveCaptain: neither played → keeps captain (×2 of 0)", () => {
 
 test("resolveCaptain: null vice → captain even if DNP", () => {
   assert.equal(resolveCaptain("cap", null, { cap: 0 }), "cap");
+});
+
+test("breakdownMatch: itemises and sums to scoreMatch", () => {
+  const s: MatchStatLine = { position: "FWD", minutes: 90, goals: 2, assists: 1, yellowCards: 1, redCards: 0, saves: 0, penaltiesSaved: 0, penaltiesMissed: 0, goalsConceded: 1, ownGoals: 0 };
+  const bd = breakdownMatch(s);
+  const sum = bd.reduce((t, c) => t + c.pts, 0);
+  assert.equal(sum, scoreMatch(s)); // breakdown sums to the total
+  // FWD: 60+min (2) + 2 goals (8) + 1 assist (3) − 1 yellow (1) = 12
+  assert.equal(sum, 12);
+  assert.ok(bd.some((c) => c.label.includes("goal")));
+});
+
+test("breakdownMatch: GK clean sheet + saves", () => {
+  const s: MatchStatLine = { position: "GK", minutes: 90, goals: 0, assists: 0, yellowCards: 0, redCards: 0, saves: 6, penaltiesSaved: 0, penaltiesMissed: 0, goalsConceded: 0, ownGoals: 0 };
+  const bd = breakdownMatch(s);
+  assert.equal(bd.reduce((t, c) => t + c.pts, 0), scoreMatch(s)); // 2 + 4 (CS) + 2 (saves) = 8
+  assert.ok(bd.some((c) => c.label === "Clean sheet"));
+});
+
+test("eventPoints: goal value by position, cards flat, own goal", () => {
+  assert.equal(eventPoints("Goal", "Normal Goal", "FWD"), 4);
+  assert.equal(eventPoints("Goal", "Normal Goal", "DEF"), 6);
+  assert.equal(eventPoints("Goal", "Own Goal", "DEF"), -2);
+  assert.equal(eventPoints("Card", "Yellow Card", null), -1);
+  assert.equal(eventPoints("Card", "Red Card", null), -3);
+  assert.equal(eventPoints("subst", "Substitution 1", null), null);
+  assert.equal(eventPoints("Goal", "Normal Goal", null), null); // unknown position
 });

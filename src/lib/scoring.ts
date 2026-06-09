@@ -64,6 +64,68 @@ export function scoreMatch(s: MatchStatLine): number {
   return pts;
 }
 
+/** One labelled component of a player's match score (for the breakdown UI). */
+export interface PointComponent {
+  label: string;
+  pts: number;
+}
+
+/**
+ * Break a player's match score into labelled components — same maths as
+ * scoreMatch, but itemised (Appearance / Goals / Assists / Clean sheet / …).
+ * Zero components are omitted. The sum equals scoreMatch(s).
+ */
+export function breakdownMatch(s: MatchStatLine): PointComponent[] {
+  const out: PointComponent[] = [];
+  const add = (label: string, pts: number) => { if (pts !== 0) out.push({ label, pts }); };
+
+  if (s.minutes >= 60) add("Played 60+ mins", 2);
+  else if (s.minutes >= 1) add("Appearance", 1);
+
+  if (s.goals > 0) add(`${s.goals} goal${s.goals > 1 ? "s" : ""}`, s.goals * GOAL_POINTS[s.position]);
+  if (s.assists > 0) add(`${s.assists} assist${s.assists > 1 ? "s" : ""}`, s.assists * 3);
+
+  if (s.minutes >= 60 && s.goalsConceded === 0 && CLEAN_SHEET_POINTS[s.position] > 0) {
+    add("Clean sheet", CLEAN_SHEET_POINTS[s.position]);
+  }
+  if (s.position === "GK") {
+    if (s.saves >= 3) add(`${s.saves} saves`, Math.floor(s.saves / 3));
+    if (s.penaltiesSaved > 0) add(`${s.penaltiesSaved} pen saved`, s.penaltiesSaved * 5);
+  }
+  if ((s.position === "GK" || s.position === "DEF") && s.goalsConceded >= 2) {
+    add(`${s.goalsConceded} conceded`, -Math.floor(s.goalsConceded / 2));
+  }
+  if (s.penaltiesMissed > 0) add(`${s.penaltiesMissed} pen missed`, -s.penaltiesMissed * 2);
+  if (s.yellowCards > 0) add("Yellow card", -s.yellowCards * 1);
+  if (s.redCards > 0) add("Red card", -s.redCards * 3);
+  if (s.ownGoals > 0) add(`${s.ownGoals} own goal${s.ownGoals > 1 ? "s" : ""}`, -s.ownGoals * 2);
+
+  return out;
+}
+
+/**
+ * Fantasy points contributed by a single MATCH EVENT (for the events timeline).
+ * A goal's value depends on the scorer's position; cards are flat. Returns null
+ * for events that don't carry points (subs/VAR) or when position is unknown.
+ */
+export function eventPoints(
+  type: string,
+  detail: string,
+  position: Position | null,
+): number | null {
+  const d = detail.toLowerCase();
+  if (type === "Goal") {
+    if (d.includes("own")) return -2; // own goal
+    if (!position) return null;
+    return GOAL_POINTS[position];
+  }
+  if (type === "Card") {
+    if (d.includes("red")) return -3;
+    if (d.includes("yellow")) return -1;
+  }
+  return null;
+}
+
 /**
  * Gameweek total for a squad: sum starting XI, captain scores ×captainMultiplier.
  * captainMultiplier defaults to 2; pass 3 when the user has the extra_captain perk.

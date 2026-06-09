@@ -230,6 +230,7 @@ function StatsTab({ data }: { data: PlayerProfileView }) {
 const ratingTone = (r: number) => (r >= 7.5 ? " r-hi" : r >= 6.5 ? " r-mid" : " r-lo");
 
 function MatchesTab({ data }: { data: PlayerProfileView }) {
+  const [open, setOpen] = useState<number | null>(null);
   if (data.matches.length === 0) {
     return (
       <div className="pp-tabbody">
@@ -252,31 +253,58 @@ function MatchesTab({ data }: { data: PlayerProfileView }) {
           <span className="pp-mh-c pts">Pts</span>
         </div>
         {data.matches.map((m, i) => (
-          <div key={i} className={"pp-mrow" + (m.minutes === 0 ? " dnp" : "")}>
-            <span className="pp-mrow-rd">{m.round}</span>
-            <span className="pp-mrow-opp">
-              <span className="pp-ha">{m.home ? "H" : "A"}</span>
-              <Flag country={m.opp} size={15} round />
-              <span className="pp-opp-name">{lastName(m.opp.replace(/-/g, " "))}</span>
-              <span className={"pp-res res-" + m.result}>
-                {m.score[0]}–{m.score[1]}
+          <div key={i}>
+            <button
+              type="button"
+              className={"pp-mrow" + (m.minutes === 0 ? " dnp" : "") + (open === i ? " open" : "")}
+              onClick={() => setOpen(open === i ? null : i)}
+              title="Tap for the points breakdown"
+            >
+              <span className="pp-mrow-rd">{m.round}</span>
+              <span className="pp-mrow-opp">
+                <span className="pp-ha">{m.home ? "H" : "A"}</span>
+                <Flag country={m.opp} size={15} round />
+                <span className="pp-opp-name">{lastName(m.opp.replace(/-/g, " "))}</span>
+                <span className={"pp-res res-" + m.result}>
+                  {m.score[0]}–{m.score[1]}
+                </span>
+                <span className="pp-cards">
+                  {m.yellow && <span className="pp-card yellow" />}
+                  {m.red && <span className="pp-card red" />}
+                </span>
               </span>
-              <span className="pp-cards">
-                {m.yellow && <span className="pp-card yellow" />}
-                {m.red && <span className="pp-card red" />}
+              <span className="pp-mrow-c num">{m.minutes === 0 ? "—" : m.minutes + "'"}</span>
+              <span className="pp-mrow-c num">{m.minutes === 0 ? "—" : m.goals}</span>
+              <span className="pp-mrow-c num">{m.minutes === 0 ? "—" : m.assists}</span>
+              <span className={"pp-mrow-c num" + (m.rating ? ratingTone(m.rating) : "")}>
+                {m.rating ? m.rating.toFixed(1) : "—"}
               </span>
-            </span>
-            <span className="pp-mrow-c num">{m.minutes === 0 ? "—" : m.minutes + "'"}</span>
-            <span className="pp-mrow-c num">{m.minutes === 0 ? "—" : m.goals}</span>
-            <span className="pp-mrow-c num">{m.minutes === 0 ? "—" : m.assists}</span>
-            <span className={"pp-mrow-c num" + (m.rating ? ratingTone(m.rating) : "")}>
-              {m.rating ? m.rating.toFixed(1) : "—"}
-            </span>
-            <span className="pp-mrow-c pts">
-              <span className={"pp-fp num" + (m.fantasy >= 8 ? " hot" : m.fantasy <= 1 ? " cold" : "")}>
-                {m.fantasy}
+              <span className="pp-mrow-c pts">
+                <span className={"pp-fp num" + (m.fantasy >= 8 ? " hot" : m.fantasy <= 1 ? " cold" : "")}>
+                  {m.fantasy}
+                </span>
               </span>
-            </span>
+            </button>
+            {open === i && (
+              <div className="pp-breakdown">
+                {m.components.length === 0 ? (
+                  <span className="pp-bd-empty">No points this match.</span>
+                ) : (
+                  m.components.map((c, j) => (
+                    <span key={j} className="pp-bd-row">
+                      <span className="pp-bd-label">{c.label}</span>
+                      <span className={"pp-bd-pts num" + (c.pts < 0 ? " neg" : "")}>
+                        {c.pts > 0 ? `+${c.pts}` : c.pts}
+                      </span>
+                    </span>
+                  ))
+                )}
+                <span className="pp-bd-row pp-bd-total">
+                  <span className="pp-bd-label">Total</span>
+                  <span className="pp-bd-pts num">{m.fantasy}</span>
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>

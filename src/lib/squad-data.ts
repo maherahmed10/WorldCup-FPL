@@ -14,13 +14,31 @@ export function teamsViewable(gameweek: { deadline: Date } | null | undefined): 
   return !!gameweek && gameweek.deadline.getTime() <= Date.now();
 }
 
-/** The gameweek whose deadline is next (or the current open one). */
+/**
+ * The SCORING gameweek — the one currently being played. Drives the squad load,
+ * "this round" points, captain, and transfer/store eligibility (isKnockout).
+ * First gameweek whose window hasn't fully CLOSED (endsAt >= now).
+ */
 export async function getCurrentGameweek() {
   const now = new Date();
-  // First gameweek whose window hasn't closed yet; fall back to the last one.
   const upcoming = await db.gameweek.findFirst({
     where: { endsAt: { gte: now } },
     orderBy: { startsAt: "asc" },
+  });
+  return upcoming ?? (await db.gameweek.findFirst({ orderBy: { startsAt: "desc" } }));
+}
+
+/**
+ * The UPCOMING-DEADLINE gameweek — the next one you must act before. Once the
+ * current gameweek's DEADLINE (first kickoff) passes, this advances to the next
+ * gameweek so the dashboard countdown shows the deadline you can still act on,
+ * not one that's already gone. First gameweek with deadline still in the future.
+ */
+export async function getUpcomingDeadlineGameweek() {
+  const now = new Date();
+  const upcoming = await db.gameweek.findFirst({
+    where: { deadline: { gt: now } },
+    orderBy: { deadline: "asc" },
   });
   return upcoming ?? (await db.gameweek.findFirst({ orderBy: { startsAt: "desc" } }));
 }

@@ -7,9 +7,10 @@ import { db } from "@/lib/db";
 import { Icon } from "@/components/Icon";
 import { StatCard } from "@/components/StatCard";
 import { Countdown } from "@/components/Countdown";
-import { Pitch } from "@/components/Pitch";
+import { TeamPitch } from "@/components/TeamPitch";
 import {
   getCurrentGameweek,
+  getUpcomingDeadlineGameweek,
   getActiveSquad,
   toPitchRows,
 } from "@/lib/squad-data";
@@ -79,8 +80,10 @@ export default async function TeamPage() {
 
   // ---- has a squad: full dashboard ----
   const squadValue = totalPrice(squad.players); // tenths of a million
-  // gameweek is guaranteed here (we'd have hit the empty state otherwise).
-  const deadlineMs = gameweek!.deadline.getTime();
+  // The countdown banner shows the NEXT deadline you can still act on — which
+  // advances to the next gameweek once the current one's deadline has passed.
+  const deadlineGw = await getUpcomingDeadlineGameweek();
+  const deadlineMs = deadlineGw?.deadline.getTime() ?? gameweek!.deadline.getTime();
   const rows = toPitchRows(squad.players);
   const bench = squad.players.filter((p) => !p.isStarting);
 
@@ -146,7 +149,7 @@ export default async function TeamPage() {
             <Icon name="clock" size={20} style={{ color: "var(--gold)" }} />
           </div>
           <div>
-            <h4>{gameweek?.label} deadline</h4>
+            <h4>{deadlineGw?.label ?? gameweek?.label} deadline</h4>
             <p>Set your captain and squad before kickoff.</p>
           </div>
         </div>
@@ -156,7 +159,7 @@ export default async function TeamPage() {
       <div className="two-col" style={{ marginTop: 16 }}>
         <div>
           <div className="pitch-wrap">
-            <Pitch rows={rows} captainId={captainId} viceId={viceId} mode="view" gwPoints={gwPoints} />
+            <TeamPitch rows={rows} captainId={captainId} viceId={viceId} gwPoints={gwPoints} />
           </div>
         </div>
         <div>

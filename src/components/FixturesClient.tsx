@@ -1,8 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { sortGroupStandings, type GroupStandings } from "@/lib/leagues";
+
+// Group fixtures into chronological day buckets for the date separators.
+function groupByDay(fixtures: FixtureData[]): Array<{ key: string; label: string; fixtures: FixtureData[] }> {
+  const byKey = new Map<string, { key: string; label: string; fixtures: FixtureData[] }>();
+  for (const f of [...fixtures].sort((a, b) => +new Date(a.kickoff) - +new Date(b.kickoff))) {
+    const d = new Date(f.kickoff);
+    const key = d.toISOString().slice(0, 10); // YYYY-MM-DD
+    const label = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    if (!byKey.has(key)) byKey.set(key, { key, label, fixtures: [] });
+    byKey.get(key)!.fixtures.push(f);
+  }
+  return [...byKey.values()];
+}
 
 // ── Serialisable types passed from the server component ──────────────────────
 
@@ -45,6 +58,7 @@ export function FixturesClient({ gameweeks, groupStandings }: Props) {
 
   const active = gameweeks.find((gw) => gw.label === activeLabel) ?? gameweeks[0];
   const isGroupStage = active?.roundType === "GROUP";
+  const dayGroups = useMemo(() => groupByDay(active?.fixtures ?? []), [active]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -113,12 +127,18 @@ export function FixturesClient({ gameweeks, groupStandings }: Props) {
               className="mb-6 overflow-hidden rounded-2xl border"
               style={{ background: "var(--surface)", borderColor: "var(--line)" }}
             >
-              {active.fixtures.map((f, i) => (
-                <FixtureRow
-                  key={f.id}
-                  fixture={f}
-                  divider={i < active.fixtures.length - 1}
-                />
+              {dayGroups.map((g, gi) => (
+                <Fragment key={g.key}>
+                  <div className="fx-date-sep">{g.label}</div>
+                  {g.fixtures.map((f, i) => (
+                    <FixtureRow
+                      key={f.id}
+                      fixture={f}
+                      // divider between rows in a day, and before the next day's header
+                      divider={i < g.fixtures.length - 1 || gi < dayGroups.length - 1}
+                    />
+                  ))}
+                </Fragment>
               ))}
             </div>
           )}

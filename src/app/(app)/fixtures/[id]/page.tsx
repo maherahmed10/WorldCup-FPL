@@ -64,6 +64,22 @@ export default async function FixtureDetailPage({
     }),
   ]);
 
+  // Map API player ids → our Player.id + position, so lineups become clickable
+  // (open the profile by our id) and events can show the fantasy points earned.
+  const apiIds = [
+    ...new Set([
+      ...rawLineups.map((l) => l.playerApiId),
+      ...rawEvents.map((e) => e.playerApiId).filter((x): x is number => x != null),
+    ]),
+  ];
+  const ourPlayers = apiIds.length
+    ? await db.player.findMany({
+        where: { apiPlayerId: { in: apiIds } },
+        select: { id: true, apiPlayerId: true, position: true },
+      })
+    : [];
+  const byApiId = new Map(ourPlayers.map((p) => [p.apiPlayerId, p]));
+
   const statsData: MatchStatsData | null =
     rawStats.length > 0 || rawEvents.length > 0 || rawLineups.length > 0
       ? {
@@ -79,6 +95,7 @@ export default async function FixtureDetailPage({
             type: e.type,
             detail: e.detail,
             comments: e.comments ?? null,
+            position: (e.playerApiId != null ? byApiId.get(e.playerApiId)?.position : null) ?? null,
           })),
           statistics: rawStats.map((s) => ({
             id: s.id,
@@ -96,6 +113,7 @@ export default async function FixtureDetailPage({
             pos: l.pos ?? null,
             grid: l.grid ?? null,
             isSubstitute: l.isSubstitute,
+            ourId: byApiId.get(l.playerApiId)?.id ?? null,
           })),
         }
       : null;

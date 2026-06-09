@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import type { Position } from "@/lib/players";
+import { breakdownMatch, type PointComponent, type Position as ScoringPosition } from "@/lib/scoring";
 
 // Fixture Difficulty Rating by country (1 very easy … 5 very hard).
 // From the design handoff's STRENGTH map, keyed by our Team.country names.
@@ -34,6 +35,7 @@ export interface ProfileMatchRow {
   red: boolean;
   rating: number | null;
   fantasy: number;
+  components: PointComponent[]; // itemised point breakdown for this match
 }
 
 export interface ProfileFixtureRow {
@@ -103,6 +105,10 @@ export interface ProfilePlayerRecord {
     yellowCards: number;
     redCards: number;
     goalsConceded: number;
+    saves: number;
+    penaltiesSaved: number;
+    penaltiesMissed: number;
+    ownGoals: number;
     rating: number | null;
     fantasyPoints: number | null;
     fixture: {
@@ -168,6 +174,19 @@ export function toPlayerProfile(
     const myGoals = (home ? f.homeScore : f.awayScore) ?? 0;
     const oppGoals = (home ? f.awayScore : f.homeScore) ?? 0;
     const result: "W" | "D" | "L" = myGoals > oppGoals ? "W" : myGoals < oppGoals ? "L" : "D";
+    const components = breakdownMatch({
+      position: p.position as ScoringPosition,
+      minutes: s.minutes,
+      goals: s.goals,
+      assists: s.assists,
+      yellowCards: s.yellowCards,
+      redCards: s.redCards,
+      saves: s.saves,
+      penaltiesSaved: s.penaltiesSaved,
+      penaltiesMissed: s.penaltiesMissed,
+      goalsConceded: s.goalsConceded,
+      ownGoals: s.ownGoals,
+    });
     return {
       round: abbrevRound(f.gameweek.label),
       opp: oppName,
@@ -181,6 +200,7 @@ export function toPlayerProfile(
       red: s.redCards > 0,
       rating: s.rating,
       fantasy: s.fantasyPoints ?? 0,
+      components,
     };
   });
 

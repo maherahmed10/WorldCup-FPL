@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Flag } from "@/components/Flag";
+import { Jersey } from "@/components/Jersey";
+import { PlayerProfileModal } from "@/components/PlayerProfileModal";
+import { eventPoints } from "@/lib/scoring";
 
 // ── Serialisable types (passed from the server component) ─────────────────────
 
@@ -37,6 +40,7 @@ export interface MatchEventData {
   type: string;
   detail: string;
   comments: string | null;
+  position: "GK" | "DEF" | "MID" | "FWD" | null; // for the fantasy-point chip
 }
 
 export interface MatchStatisticData {
@@ -56,6 +60,7 @@ export interface MatchLineupData {
   pos: string | null;
   grid: string | null;
   isSubstitute: boolean;
+  ourId: string | null; // our Player.id (null = not in our pool → not clickable)
 }
 
 export interface MatchStatsData {
@@ -103,6 +108,7 @@ export function FixtureStatsClient({
   haul: YourHaul | null;
 }) {
   const [tab, setTab] = useState<"stats" | "events" | "lineups">("stats");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const isFinished = f.status === "FINISHED";
   const kickoff = new Date(f.kickoff);
@@ -315,10 +321,15 @@ export function FixtureStatsClient({
                 lineups={stats.lineups}
                 homeTeam={f.homeTeam}
                 awayTeam={f.awayTeam}
+                onPlayerClick={setSelectedId}
               />
             )}
           </div>
         </div>
+      )}
+
+      {selectedId && (
+        <PlayerProfileModal playerId={selectedId} onClose={() => setSelectedId(null)} />
       )}
     </main>
   );
@@ -508,6 +519,22 @@ function EventsTab({
                   <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
                     {ev.playerName}
                   </span>
+                  {(() => {
+                    const pts = eventPoints(ev.type, ev.detail, ev.position);
+                    if (pts == null || pts === 0) return null;
+                    return (
+                      <span
+                        className="num rounded px-1.5 text-[11px] font-extrabold"
+                        style={{
+                          background: pts > 0 ? "rgba(24,224,138,0.16)" : "rgba(255,77,94,0.16)",
+                          color: pts > 0 ? "var(--accent)" : "var(--live)",
+                        }}
+                        title="Fantasy points from this event"
+                      >
+                        {pts > 0 ? `+${pts}` : pts}
+                      </span>
+                    );
+                  })()}
                 </div>
                 {ev.assistName && (
                   <p className="text-xs" style={{ color: "var(--text-3)" }}>
@@ -534,10 +561,12 @@ function LineupsTab({
   lineups,
   homeTeam,
   awayTeam,
+  onPlayerClick,
 }: {
   lineups: MatchLineupData[];
   homeTeam: TeamDetail;
   awayTeam: TeamDetail;
+  onPlayerClick: (ourId: string) => void;
 }) {
   if (lineups.length === 0) return <EmptyStats />;
 
@@ -546,8 +575,11 @@ function LineupsTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <LineupCard lineup={homeLineup} team={homeTeam} />
-      <LineupCard lineup={awayLineup} team={awayTeam} />
+      {/* Two pitches side by side on desktop, stacked on mobile. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LineupCard lineup={homeLineup} team={homeTeam} onPlayerClick={onPlayerClick} />
+        <LineupCard lineup={awayLineup} team={awayTeam} onPlayerClick={onPlayerClick} />
+      </div>
     </div>
   );
 }
@@ -555,15 +587,15 @@ function LineupsTab({
 function LineupCard({
   lineup,
   team,
+  onPlayerClick,
 }: {
   lineup: MatchLineupData[];
   team: TeamDetail;
+  onPlayerClick: (ourId: string) => void;
 }) {
   const formation = lineup[0]?.formation ?? null;
   const starters = lineup.filter((p) => !p.isSubstitute);
   const bench = lineup.filter((p) => p.isSubstitute);
-
-  // Group starters by row (grid "row:col" — row 1 = GK, row 2 = DEF, etc.)
   const rows = groupByRow(starters);
 
   return (
@@ -572,35 +604,27 @@ function LineupCard({
       style={{ background: "var(--surface)", borderColor: "var(--line)" }}
     >
       {/* Team header */}
-      <div
-        className="flex items-center gap-2.5 border-b px-4 py-3"
-        style={{ borderColor: "var(--line)" }}
-      >
+      <div className="flex items-center gap-2.5 border-b px-4 py-3" style={{ borderColor: "var(--line)" }}>
         <Flag country={team.country} size={20} round />
         <span className="font-[family-name:var(--font-display)] text-sm font-bold" style={{ color: "var(--text)" }}>
           {team.name}
         </span>
         {formation && (
-          <span
-            className="ml-auto rounded-full px-2.5 py-0.5 text-xs font-bold"
-            style={{ background: "var(--surface-2)", color: "var(--accent)" }}
-          >
+          <span className="ml-auto rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: "var(--surface-2)", color: "var(--accent)" }}>
             {formation}
           </span>
         )}
       </div>
 
-      {/* Formation rows */}
+      {/* Mini pitch — starting XI positioned by row */}
       {rows.length > 0 && (
-        <div className="px-4 py-4">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-3)" }}>
-            Starting XI
-          </p>
-          <div className="flex flex-col gap-3">
+        <div className="mini-pitch">
+          <MiniPitchBg />
+          <div className="mini-pitch-rows">
             {rows.map((row, ri) => (
-              <div key={ri} className="flex flex-wrap justify-center gap-2">
+              <div key={ri} className="mini-pitch-row">
                 {row.map((p) => (
-                  <PlayerChip key={p.id} player={p} />
+                  <PlayerToken key={p.id} player={p} country={team.country} onClick={onPlayerClick} />
                 ))}
               </div>
             ))}
@@ -608,18 +632,29 @@ function LineupCard({
         </div>
       )}
 
-      {/* Bench */}
+      {/* Bench (clickable list) */}
       {bench.length > 0 && (
-        <div
-          className="border-t px-4 py-4"
-          style={{ borderColor: "var(--line)" }}
-        >
+        <div className="border-t px-4 py-4" style={{ borderColor: "var(--line)" }}>
           <p className="mb-3 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-3)" }}>
             Bench
           </p>
           <div className="flex flex-wrap gap-2">
             {bench.map((p) => (
-              <PlayerChip key={p.id} player={p} />
+              <button
+                key={p.id}
+                type="button"
+                disabled={!p.ourId}
+                onClick={() => p.ourId && onPlayerClick(p.ourId)}
+                className="flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 transition-colors"
+                style={{ background: "var(--surface-2)", borderColor: "var(--line)", cursor: p.ourId ? "pointer" : "default" }}
+              >
+                <span className="text-xs font-semibold" style={{ color: "var(--text)" }}>{p.playerName}</span>
+                {p.pos && (
+                  <span className="rounded px-1 text-[10px] font-bold uppercase" style={{ background: posColor(p.pos) + "22", color: posColor(p.pos) }}>
+                    {p.pos}
+                  </span>
+                )}
+              </button>
             ))}
           </div>
         </div>
@@ -628,32 +663,31 @@ function LineupCard({
   );
 }
 
-function PlayerChip({ player: p }: { player: MatchLineupData }) {
+// A single pitch token: jersey + last name, clickable → profile (if in our pool).
+function PlayerToken({ player: p, country, onClick }: { player: MatchLineupData; country: string; onClick: (id: string) => void }) {
+  const last = p.playerName.split(" ").slice(-1)[0];
   return (
-    <div
-      className="flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5"
-      style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}
+    <button
+      type="button"
+      disabled={!p.ourId}
+      onClick={() => p.ourId && onClick(p.ourId)}
+      className="mini-token"
+      style={{ cursor: p.ourId ? "pointer" : "default" }}
+      title={p.ourId ? `View ${p.playerName}` : p.playerName}
     >
-      {p.playerNumber != null && (
-        <span
-          className="font-[family-name:var(--font-display)] text-xs font-bold tabular-nums"
-          style={{ color: "var(--text-3)", minWidth: 14 }}
-        >
-          {p.playerNumber}
-        </span>
-      )}
-      <span className="text-xs font-semibold" style={{ color: "var(--text)" }}>
-        {p.playerName}
-      </span>
-      {p.pos && (
-        <span
-          className="rounded px-1 text-[10px] font-bold uppercase"
-          style={{ background: posColor(p.pos) + "22", color: posColor(p.pos) }}
-        >
-          {p.pos}
-        </span>
-      )}
-    </div>
+      <span className="mini-token-jersey"><Jersey country={country} size={30} /></span>
+      <span className="mini-token-name">{last}</span>
+    </button>
+  );
+}
+
+function MiniPitchBg() {
+  return (
+    <svg className="mini-pitch-lines" viewBox="0 0 300 380" preserveAspectRatio="none">
+      <rect x={6} y={6} width={288} height={368} rx={6} fill="none" stroke="var(--pitch-line)" strokeWidth={1.5} />
+      <line x1={6} y1={190} x2={294} y2={190} stroke="var(--pitch-line)" strokeWidth={1.2} />
+      <circle cx={150} cy={190} r={42} fill="none" stroke="var(--pitch-line)" strokeWidth={1.2} />
+    </svg>
   );
 }
 
@@ -667,15 +701,19 @@ function posColor(pos: string): string {
   }
 }
 
+// Order pos letters into pitch rows. Prefer the grid "row:col"; fall back to the
+// pos letter (G→DEF→MID→FWD) when grid is missing (our simulated lineups have no grid).
+const POS_ROW: Record<string, number> = { G: 1, D: 2, M: 3, F: 4 };
 function groupByRow(starters: MatchLineupData[]): MatchLineupData[][] {
-  // Sort by grid row (e.g. "1:1", "2:1" → row 1, 2, ...), then by column.
+  const hasGrid = starters.some((p) => p.grid);
   const rows = new Map<number, MatchLineupData[]>();
   for (const p of starters) {
-    const row = p.grid ? parseInt(p.grid.split(":")[0], 10) : 99;
+    const row = hasGrid
+      ? (p.grid ? parseInt(p.grid.split(":")[0], 10) : 99)
+      : (p.pos ? POS_ROW[p.pos] ?? 99 : 99);
     if (!rows.has(row)) rows.set(row, []);
     rows.get(row)!.push(p);
   }
-  // Sort each row by column, then return rows sorted by row number.
   return [...rows.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, players]) =>
