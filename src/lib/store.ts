@@ -14,7 +14,7 @@ export const STORE_ITEMS = [
     id: "perk_extra_captain",
     name: "Extra Captain",
     description: "Your captain scores triple points for one gameweek.",
-    cost: 2_000_000,
+    cost: 2_500_000,
     effectKey: "extra_captain" as const,
   },
   {
@@ -28,7 +28,7 @@ export const STORE_ITEMS = [
     id: "perk_bench_boost",
     name: "Bench Boost",
     description: "Your bench players' points count for one full gameweek.",
-    cost: 3_000_000,
+    cost: 3_500_000,
     effectKey: "bench_boost" as const,
   },
 ] as const;
