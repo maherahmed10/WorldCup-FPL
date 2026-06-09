@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { Icon } from "@/components/Icon";
 import { createLeague, joinLeague, type ActionResult } from "@/app/(app)/leagues/actions";
 
 // ── Types (serialisable — passed from server component) ─────────────────────
@@ -26,11 +28,13 @@ export interface LeagueData {
 interface Props {
   leagues: LeagueData[];
   userId: string | null;
+  /** Rival squads are clickable only once the transfer window has locked. */
+  canViewTeams: boolean;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function LeaguesClient({ leagues: initialLeagues, userId }: Props) {
+export function LeaguesClient({ leagues: initialLeagues, userId, canViewTeams }: Props) {
   const [leagues, setLeagues] = useState(initialLeagues);
   const [activeId, setActiveId] = useState(initialLeagues[0]?.id ?? null);
   const [view, setView] = useState<"total" | "gw">("total");
@@ -39,6 +43,7 @@ export function LeaguesClient({ leagues: initialLeagues, userId }: Props) {
 
   // Update leagues list when server revalidates (new league added via action)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync server-revalidated props into local state
     setLeagues(initialLeagues);
     if (initialLeagues.length && !initialLeagues.find((l) => l.id === activeId)) {
       setActiveId(initialLeagues[0].id);
@@ -166,7 +171,13 @@ export function LeaguesClient({ leagues: initialLeagues, userId }: Props) {
               </div>
 
               {/* Standings table */}
-              <StandingsTable rows={sorted} view={view} currentUserId={userId} />
+              <StandingsTable rows={sorted} view={view} currentUserId={userId} canViewTeams={canViewTeams} />
+              {!canViewTeams && sorted.length > 1 && (
+                <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: "var(--text-3)" }}>
+                  <Icon name="lock" size={13} />
+                  Rival squads unlock when the transfer window closes.
+                </p>
+              )}
             </>
           )}
         </>
@@ -235,10 +246,12 @@ function StandingsTable({
   rows,
   view,
   currentUserId,
+  canViewTeams,
 }: {
   rows: LeagueMemberRow[];
   view: "total" | "gw";
   currentUserId: string | null;
+  canViewTeams: boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -265,6 +278,10 @@ function StandingsTable({
       </div>
       {rows.map((row) => {
         const isYou = row.userId === currentUserId;
+        // Your own team is always reachable (/team); rivals only once the
+        // transfer window has locked (canViewTeams).
+        const clickable = isYou || canViewTeams;
+        const href = isYou ? "/team" : `/manager/${row.userId}`;
         return (
           <div
             key={row.userId}
@@ -283,26 +300,44 @@ function StandingsTable({
               </span>
               <RankMovement delta={row.delta} />
             </span>
-            <span>
-              <div className="flex items-center gap-2">
-                <div
-                  className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full text-xs font-bold"
-                  style={{ background: "var(--surface-3)", color: "var(--text)" }}
-                >
-                  {row.name[0]?.toUpperCase()}
-                </div>
-                <span className="truncate text-sm font-medium">
-                  {row.name}
-                  {isYou && (
-                    <span
-                      className="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold"
-                      style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+            <span className="min-w-0">
+              {(() => {
+                const inner = (
+                  <>
+                    <div
+                      className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full text-xs font-bold"
+                      style={{ background: "var(--surface-3)", color: "var(--text)" }}
                     >
-                      You
+                      {row.name[0]?.toUpperCase()}
+                    </div>
+                    <span className="truncate text-sm font-medium">
+                      {row.name}
+                      {isYou && (
+                        <span
+                          className="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold"
+                          style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+                        >
+                          You
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              </div>
+                    {clickable && !isYou && (
+                      <Icon name="chevright" size={14} style={{ color: "var(--text-3)", flexShrink: 0 }} />
+                    )}
+                  </>
+                );
+                return clickable ? (
+                  <Link
+                    href={href}
+                    className="flex items-center gap-2 transition-opacity hover:opacity-80"
+                    title={isYou ? "Your team" : `View ${row.name}'s team`}
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-2">{inner}</div>
+                );
+              })()}
             </span>
             <span
               className="text-right font-[family-name:var(--font-display)] text-sm tabular-nums"
@@ -343,7 +378,7 @@ function EmptyState({
         No leagues yet
       </h2>
       <p className="mb-6 text-sm" style={{ color: "var(--text-2)" }}>
-        Create your own or join a friend's mini-league.
+        Create your own or join a friend&apos;s mini-league.
       </p>
       <div className="flex justify-center gap-3">
         <button

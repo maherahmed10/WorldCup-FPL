@@ -4,6 +4,16 @@ import { db } from "@/lib/db";
 import type { Position, SquadPlayer } from "@/lib/squad-rules";
 import type { PitchPlayer, Slot } from "@/components/Pitch";
 
+/**
+ * Other managers' squads are only viewable once the current transfer window has
+ * LOCKED — i.e. the gameweek's deadline has passed. Before then (initial squad
+ * selection, or an open knockout transfer window) teams stay hidden so nobody
+ * can copy a rival mid-window.
+ */
+export function teamsViewable(gameweek: { deadline: Date } | null | undefined): boolean {
+  return !!gameweek && gameweek.deadline.getTime() <= Date.now();
+}
+
 /** The gameweek whose deadline is next (or the current open one). */
 export async function getCurrentGameweek() {
   const now = new Date();

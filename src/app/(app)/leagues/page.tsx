@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic"; // standings change after every settleme
 import { db } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { rankStandings } from "@/lib/leagues";
+import { getCurrentGameweek, teamsViewable } from "@/lib/squad-data";
 import { LeaguesClient, type LeagueData } from "@/components/LeaguesClient";
 
 // Local shape for the nested Prisma query result. Keeps callback params typed
@@ -114,5 +115,8 @@ export default async function LeaguesPage() {
     }
   }
 
-  return <LeaguesClient leagues={leagues} userId={userId} />;
+  // Rival squads are clickable only once the current transfer window has locked.
+  const canViewTeams = teamsViewable(await getCurrentGameweek());
+
+  return <LeaguesClient leagues={leagues} userId={userId} canViewTeams={canViewTeams} />;
 }

@@ -117,12 +117,12 @@ export function PredictClient({
 
   return (
     <div className="screen">
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="screen-head head-row">
         <div>
-          <h1 className="font-[family-name:var(--font-display)] text-3xl font-extrabold">Predictions</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-2)" }}>
+          <h1>Predictions</h1>
+          <div className="sub">
             Stake your virtual £ bank on match markets. Win big, spend winnings in the Store.
-          </p>
+          </div>
         </div>
         <div
           className="flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2"
