@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { getCurrentGameweek, getActiveSquad } from "@/lib/squad-data";
 import { getMaxPerCountry, type PerkLike } from "@/lib/store";
 import { SquadPicker, type PickerPlayer } from "./SquadPicker";
+import { BankConvertCard } from "./BankConvertCard";
 
 export default async function SquadPage() {
   const supabase = await createClient();
@@ -24,7 +25,7 @@ export default async function SquadPage() {
       select: { storeItemId: true, gameweekId: true, usedAt: true },
     }),
     getCurrentGameweek(),
-    db.user.findUnique({ where: { id: user.id }, select: { bettingBalance: true } }),
+    db.user.findUnique({ where: { id: user.id }, select: { bettingBalance: true, squadBudgetBonus: true } }),
   ]);
 
   const pool: PickerPlayer[] = players.map((p) => ({
@@ -40,18 +41,36 @@ export default async function SquadPage() {
   const isGroupStage = !(gameweek?.isKnockout ?? false);
 
   const existing = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
+  const budgetBonus = appUser?.squadBudgetBonus ?? 0;
+  // The per-gameweek captain/vice pick (separate from Squad.captainId).
+  const pick = gameweek
+    ? await db.gameweekPick.findUnique({
+        where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
+        select: { captainId: true, viceId: true },
+      })
+    : null;
 
   return (
-    <SquadPicker
-      pool={pool}
-      gameweekLabel={gameweek?.label ?? ""}
-      initialStarterIds={existing?.players.filter((p) => p.isStarting).map((p) => p.id) ?? []}
-      initialBenchIds={existing?.players.filter((p) => !p.isStarting).map((p) => p.id) ?? []}
-      initialCaptainId={existing?.captainId ?? null}
-      maxPerCountry={maxPerCountry}
-      balance={appUser?.bettingBalance ?? 1000}
-      ownedPerks={perks}
-      isGroupStage={isGroupStage}
-    />
+    <>
+      {!isGroupStage && appUser && (
+        <BankConvertCard
+          bettingBalance={appUser.bettingBalance}
+          currentBonus={budgetBonus}
+        />
+      )}
+      <SquadPicker
+        pool={pool}
+        gameweekLabel={gameweek?.label ?? ""}
+        initialStarterIds={existing?.players.filter((p) => p.isStarting).map((p) => p.id) ?? []}
+        initialBenchIds={existing?.players.filter((p) => !p.isStarting).map((p) => p.id) ?? []}
+        initialCaptainId={pick?.captainId ?? existing?.captainId ?? null}
+        initialViceId={pick?.viceId ?? null}
+        maxPerCountry={maxPerCountry}
+        balance={appUser?.bettingBalance ?? 1000}
+        budgetBonus={budgetBonus}
+        ownedPerks={perks}
+        isGroupStage={isGroupStage}
+      />
+    </>
   );
 }

@@ -80,19 +80,20 @@ export interface ValidationResult {
 /** Validate a full 15-player squad against the FPL rules. */
 export function validateSquad(
   players: SquadPlayer[],
-  opts?: { maxPerCountry?: number },
+  opts?: { maxPerCountry?: number; budgetBonus?: number },
 ): ValidationResult {
   const maxPerCountry = opts?.maxPerCountry ?? MAX_PER_COUNTRY;
+  const effectiveBudget = BUDGET + (opts?.budgetBonus ?? 0);
   const errors: ValidationError[] = [];
   const total = players.length;
   const spent = totalPrice(players);
-  const remaining = BUDGET - spent;
+  const remaining = effectiveBudget - spent;
 
   // Budget
-  if (spent > BUDGET) {
+  if (spent > effectiveBudget) {
     errors.push({
       type: "budget",
-      message: `Over budget by ${((spent - BUDGET) / 10).toFixed(1)}M — sell a player to continue.`,
+      message: `Over budget by ${((spent - effectiveBudget) / 10).toFixed(1)}M — sell a player to continue.`,
     });
   }
 

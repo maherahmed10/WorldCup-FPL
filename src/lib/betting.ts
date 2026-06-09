@@ -26,10 +26,10 @@ export type MarketType =
   | "PLAYER_CARD";
 
 /** @deprecated Use User.bettingBalance from the DB — kept for legacy tests only. */
-export const STARTING_BALANCE = 1000;
+export const STARTING_BALANCE = 5000000;
 
 /** Starting virtual £ bank credited to each new user. Matches User.bettingBalance DB default. */
-export const STARTING_MONEY = 1000;
+export const STARTING_MONEY = 5000000;
 
 /** Format a money amount as a £ string with thousands separator, e.g. 10000 → "£10,000". */
 export function formatMoney(amount: number): string {

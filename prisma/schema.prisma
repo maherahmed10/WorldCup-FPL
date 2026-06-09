@@ -71,15 +71,20 @@ model User {
   email          String   @unique
   name           String
   teamName       String?
-  bettingBalance Int      @default(1000) // virtual £ bank — deducted on bet/purchase, credited on win/void
-  onboardedAt    DateTime? // set when the first-login Welcome guide is dismissed (null = not onboarded yet)
-  createdAt      DateTime @default(now())
+  bettingBalance    Int      @default(5000000) // virtual £ bank — deducted on bet/purchase, credited on win/void
+  squadBudgetBonus  Int      @default(0)       // tenths of a million converted from betting bank after group stage
+  onboardedAt       DateTime? // set when the first-login Welcome guide is dismissed (null = not onboarded yet)
+  createdAt         DateTime @default(now())
 
   squads          Squad[]
   bets            Bet[]
   leagueMembers   LeagueMember[]
   ownedLeagues    League[]       @relation("LeagueOwner")
   perks           UserPerk[]
+  h2hCreated      H2HChallenge[] @relation("H2HCreator")
+  h2hReceived     H2HChallenge[] @relation("H2HOpponent")
+  h2hWon          H2HChallenge[] @relation("H2HWinner")
+  gameweekPicks   GameweekPick[]
 }
 
 model League {
@@ -170,6 +175,7 @@ model Gameweek {
   fixtures Fixture[]
   squads   Squad[]
   bets     Bet[]
+  picks    GameweekPick[]
 
   @@index([startsAt])
 }
@@ -191,9 +197,10 @@ model Fixture {
   awayTeamId String
   awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id])
 
-  playerStats PlayerMatchStat[]
-  bets        Bet[]
-  odds        FixtureOdds[]
+  playerStats   PlayerMatchStat[]
+  bets          Bet[]
+  odds          FixtureOdds[]
+  h2hChallenges H2HChallenge[]
 
   @@index([kickoff])
   @@index([gameweekId])
@@ -275,6 +282,24 @@ model SquadPlayer {
   @@unique([squadId, playerId])
 }
 
+// GameweekPick — the captain + vice a user picks FOR a specific gameweek (FPL:
+// captaincy changes every week, even while the squad is locked). Settlement
+// reads this per gameweek: captain scores ×2, or the vice does if the captain
+// played 0 minutes. Editable until Gameweek.deadline (first kickoff of the GW).
+model GameweekPick {
+  id         String @id @default(cuid())
+  userId     String @db.Uuid
+  gameweekId String
+  captainId  String // Player.id — scores ×2
+  viceId     String // Player.id — scores ×2 if the captain doesn't play
+
+  user     User     @relation(fields: [userId], references: [id])
+  gameweek Gameweek @relation(fields: [gameweekId], references: [id])
+
+  @@unique([userId, gameweekId])
+  @@index([userId])
+}
+
 // Bet — points-only prediction. payout = stake * multiplier if WON.
 model Bet {
   id         String     @id @default(cuid())
@@ -295,6 +320,49 @@ model Bet {
 
   @@index([userId])
   @@index([gameweekId])
+}
+
+// ───────────────────────── Head-to-Head ─────────────────────────
+
+enum H2HStatus {
+  PENDING   // waiting for opponent to accept or reject
+  ACCEPTED  // both stakes locked; active rivalry
+  REJECTED  // opponent rejected; creator stake refunded
+  SETTLED   // winner declared; pot paid out
+  CANCELLED // creator cancelled while still PENDING; stake refunded
+}
+
+// A peer-to-peer side-bet mirroring an existing market selection.
+// Creator picks an open bet, nominates a league friend and a stake.
+// Friend must match the same stake. Winner takes the full pot (2× stake).
+// Settlement is automatic when the linked fixture finishes.
+model H2HChallenge {
+  id         String    @id @default(cuid())
+  creatorId  String    @db.Uuid
+  opponentId String    @db.Uuid
+
+  // Market details (copied from the source bet at creation time)
+  fixtureId  String    // required — drives auto-settlement
+  selection  String    // "HOME" / "AWAY" / "OVER_2.5" / "scorer:id" etc.
+  multiplier Float     // house odds at creation (display only)
+  pickLabel  String    // human label: "Mexico", "Over 2.5", "Mbappé"
+
+  stake      Int       // each side puts this in; pot = 2 × stake
+
+  status     H2HStatus @default(PENDING)
+  winnerId   String?   @db.Uuid
+  settledAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  creator  User    @relation("H2HCreator",  fields: [creatorId],  references: [id])
+  opponent User    @relation("H2HOpponent", fields: [opponentId], references: [id])
+  winner   User?   @relation("H2HWinner",   fields: [winnerId],   references: [id])
+  fixture  Fixture @relation(fields: [fixtureId], references: [id])
+
+  @@index([creatorId])
+  @@index([opponentId])
+  @@index([status])
+  @@index([fixtureId])
 }
 
 // StoreItem — catalogue entry (seeded, not user-created).

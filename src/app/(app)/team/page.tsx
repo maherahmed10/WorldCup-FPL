@@ -15,12 +15,14 @@ import {
 } from "@/lib/squad-data";
 import {
   getGameweekPlayerPoints,
+  getGameweekMinutes,
   squadGameweekTotal,
   getUserSeasonTotal,
 } from "@/lib/squad-points";
 import { totalPrice } from "@/lib/squad-rules";
 import type { PerkLike } from "@/lib/store";
 import { TeamNamePrompt } from "./TeamNamePrompt";
+import { CaptainPanel } from "./CaptainPanel";
 import { MiniStore } from "@/components/MiniStore";
 
 export default async function TeamPage() {
@@ -81,13 +83,32 @@ export default async function TeamPage() {
   const rows = toPitchRows(squad.players);
   const bench = squad.players.filter((p) => !p.isStarting);
 
+  // Per-gameweek captain + vice (FPL: changes weekly). Falls back to the squad's
+  // initial captain if no pick has been made for this gameweek yet.
+  const pick = await db.gameweekPick.findUnique({
+    where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek!.id } },
+    select: { captainId: true, viceId: true },
+  });
+  const captainId = pick?.captainId ?? squad.captainId;
+  const viceId = pick?.viceId ?? null;
+  const deadlinePassed = deadlineMs <= Date.now();
+
   // Real points from settled PlayerMatchStat (0 until matches are played + settled).
   const gwPoints = await getGameweekPlayerPoints(
     squad.players.map((p) => p.id),
     gameweek!.id,
   );
-  const gwTotal = squadGameweekTotal(squad.players, squad.captainId, gwPoints);
+  const gwMinutes = await getGameweekMinutes(
+    squad.players.map((p) => p.id),
+    gameweek!.id,
+  );
+  const gwTotal = squadGameweekTotal(squad.players, captainId, gwPoints, viceId, gwMinutes);
   const seasonTotal = await getUserSeasonTotal(user.id);
+
+  // Starters as options for the captain/vice picker.
+  const starterOptions = squad.players
+    .filter((p) => p.isStarting)
+    .map((p) => ({ id: p.id, name: p.name, position: p.position, country: p.country }));
 
   // Store data for mini store panel
   const rawPerks = await db.userPerk.findMany({
@@ -133,11 +154,19 @@ export default async function TeamPage() {
       <div className="two-col" style={{ marginTop: 16 }}>
         <div>
           <div className="pitch-wrap">
-            <Pitch rows={rows} captainId={squad.captainId} mode="view" gwPoints={gwPoints} />
+            <Pitch rows={rows} captainId={captainId} viceId={viceId} mode="view" gwPoints={gwPoints} />
           </div>
         </div>
         <div>
-          <div className="card" style={{ padding: 16 }}>
+          <CaptainPanel
+            gameweekId={gameweek!.id}
+            gameweekLabel={gameweek?.label ?? ""}
+            starters={starterOptions}
+            captainId={captainId}
+            viceId={viceId}
+            deadlinePassed={deadlinePassed}
+          />
+          <div className="card" style={{ padding: 16, marginTop: 14 }}>
             <div className="sum-title" style={{ marginBottom: 10 }}>
               Bench
             </div>

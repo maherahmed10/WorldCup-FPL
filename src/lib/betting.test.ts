@@ -155,8 +155,8 @@ test("scorerMultiplier: clamped to [1.6, 8.0] and 2dp", () => {
 
 test("money balance: availableBalance uses STARTING_MONEY correctly", () => {
   const bets: BetLike[] = [{ stake: 100, multiplier: 2.0, status: "WON" }];
-  // STARTING_MONEY is 1000; -100 stake + 200 payout = 1100
-  assert.equal(availableBalance(bets, STARTING_BALANCE), 1100);
+  // -100 stake + 200 payout = +100 net on the starting balance.
+  assert.equal(availableBalance(bets, STARTING_BALANCE), STARTING_BALANCE + 100);
 });
 
 test("money balance: can't stake more than bettingBalance", () => {

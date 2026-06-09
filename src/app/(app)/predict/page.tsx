@@ -14,6 +14,7 @@ import {
 } from "@/lib/betting";
 import { judgementScorerOdds } from "@/lib/scorer-odds";
 import { PredictClient, type BetView, type FixtureMarketsView } from "./PredictClient";
+import type { H2HChallengeView } from "./H2HClient";
 
 export const dynamic = "force-dynamic";
 
@@ -203,7 +204,7 @@ export default async function PredictPage() {
     : [];
 
   // Balance comes directly from the persisted User.bettingBalance field.
-  const balance = user?.bettingBalance ?? 1000;
+  const balance = user?.bettingBalance ?? 5000000;
 
   // Resolve player names referenced by any player-prop selections.
   const propIds = rawBets
@@ -231,6 +232,73 @@ export default async function PredictPage() {
     };
   });
 
+  // H2H challenges for the current user (as creator or opponent).
+  const rawH2H = user
+    ? await db.h2HChallenge.findMany({
+        where: { OR: [{ creatorId: user.id }, { opponentId: user.id }] },
+        orderBy: { createdAt: "desc" },
+        include: {
+          creator: { select: { id: true, name: true } },
+          opponent: { select: { id: true, name: true } },
+          fixture: {
+            select: {
+              homeTeam: { select: { name: true } },
+              awayTeam: { select: { name: true } },
+            },
+          },
+        },
+      })
+    : [];
+
+  const h2hChallenges: H2HChallengeView[] = rawH2H.map((c) => ({
+    id: c.id,
+    creatorId: c.creatorId,
+    opponentId: c.opponentId,
+    fixtureId: c.fixtureId,
+    selection: c.selection,
+    multiplier: c.multiplier,
+    pickLabel: c.pickLabel,
+    stake: c.stake,
+    status: c.status as H2HChallengeView["status"],
+    winnerId: c.winnerId,
+    createdAt: c.createdAt.toISOString(),
+    creator: { id: c.creator.id, name: c.creator.name ?? "Unknown" },
+    opponent: { id: c.opponent.id, name: c.opponent.name ?? "Unknown" },
+    fixture: {
+      home: c.fixture?.homeTeam?.name ?? "—",
+      away: c.fixture?.awayTeam?.name ?? "—",
+    },
+  }));
+
+  // League members the current user can challenge (others in any shared league).
+  const leagueMembers: { id: string; name: string }[] = [];
+  if (user) {
+    const memberships = await db.leagueMember.findMany({
+      where: { userId: user.id },
+      select: { leagueId: true },
+    });
+    const leagueIds = memberships.map((m) => m.leagueId);
+    if (leagueIds.length) {
+      const others = await db.leagueMember.findMany({
+        where: { leagueId: { in: leagueIds }, userId: { not: user.id } },
+        select: { user: { select: { id: true, name: true } } },
+        distinct: ["userId"],
+      });
+      for (const o of others) {
+        leagueMembers.push({ id: o.user.id, name: o.user.name ?? "Unknown" });
+      }
+    }
+  }
+
   // The (app) layout provides the shell + auth; render the screen directly.
-  return <PredictClient markets={markets} bets={bets} balance={balance} />;
+  return (
+    <PredictClient
+      markets={markets}
+      bets={bets}
+      balance={balance}
+      h2hChallenges={h2hChallenges}
+      userId={user?.id ?? ""}
+      leagueMembers={leagueMembers}
+    />
+  );
 }

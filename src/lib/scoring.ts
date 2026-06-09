@@ -78,3 +78,19 @@ export function scoreSquadGameweek(
     return total + p.points * mult;
   }, 0);
 }
+
+/**
+ * Resolve which player wears the armband (FPL vice rule): the captain, UNLESS
+ * the captain played 0 minutes this gameweek — then the vice takes the ×2.
+ * `minutes[id]` is total minutes played in the gameweek (missing/0 = didn't play).
+ * Returns null if neither played (no doubling applied).
+ */
+export function resolveCaptain(
+  captainId: string | null,
+  viceId: string | null,
+  minutes: Record<string, number>,
+): string | null {
+  if (captainId && (minutes[captainId] ?? 0) > 0) return captainId;
+  if (viceId && (minutes[viceId] ?? 0) > 0) return viceId;
+  return captainId; // neither played → keep captain (×2 of 0 = 0 anyway)
+}
