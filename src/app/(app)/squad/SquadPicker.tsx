@@ -85,6 +85,26 @@ export function SquadPicker({
   const router = useRouter();
   const byId = useMemo(() => new Map(pool.map((p) => [p.id, p])), [pool]);
 
+  const DRAFT_KEY = `gaffer:squad_draft:${gameweekLabel}`;
+
+  // Read once on mount — seeds state below only when building from scratch (!lockRoster).
+  const [restoredDraft] = useState<{
+    starterIds: string[];
+    benchIds: string[];
+    captainId: string | null;
+    viceId: string | null;
+  } | null>(() => {
+    if (lockRoster) return null;
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(DRAFT_KEY) : null;
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return d?.starterIds?.length > 0 ? d : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [favouriteIds, setFavouriteIds] = useState<Set<string>>(
     () => new Set(initialFavouriteIds),
   );
@@ -107,17 +127,23 @@ export function SquadPicker({
   }
 
   const [squad, setSquad] = useState<SquadEntry[]>(() => {
+    const starterIds = restoredDraft?.starterIds ?? initialStarterIds;
+    const benchIds   = restoredDraft?.benchIds   ?? initialBenchIds;
     const make = (id: string, isStarting: boolean): SquadEntry | null => {
       const p = byId.get(id);
       return p ? { ...p, isStarting } : null;
     };
     return [
-      ...initialStarterIds.map((id) => make(id, true)),
-      ...initialBenchIds.map((id) => make(id, false)),
+      ...starterIds.map((id) => make(id, true)),
+      ...benchIds.map((id) => make(id, false)),
     ].filter((e): e is SquadEntry => !!e);
   });
-  const [captainId, setCaptainId] = useState<string | null>(initialCaptainId);
-  const [viceId, setViceId] = useState<string | null>(initialViceId);
+  const [captainId, setCaptainId] = useState<string | null>(
+    restoredDraft?.captainId ?? initialCaptainId,
+  );
+  const [viceId, setViceId] = useState<string | null>(
+    restoredDraft?.viceId ?? initialViceId,
+  );
   // Which slot the picker is filling: a position + whether it's a pitch (starter)
   // slot or a bench slot. null = picker closed.
   const [pickerFor, setPickerFor] = useState<{ pos: Position; starter: boolean } | null>(null);
@@ -128,6 +154,28 @@ export function SquadPicker({
   const [selectedFormation, setSelectedFormation] = useState(
     () => formationName(squad.filter((p) => p.isStarting)) ?? DEFAULT_FORMATION,
   );
+
+  // Auto-dismiss the "draft restored" banner after 4 s.
+  const [showDraftBanner, setShowDraftBanner] = useState(restoredDraft !== null);
+  useEffect(() => {
+    if (!showDraftBanner) return;
+    const t = setTimeout(() => setShowDraftBanner(false), 4000);
+    return () => clearTimeout(t);
+  }, [showDraftBanner]);
+
+  // Persist draft to localStorage on every state change (skip when roster is locked).
+  useEffect(() => {
+    if (lockRoster || squad.length === 0) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        starterIds: squad.filter((p) => p.isStarting).map((p) => p.id),
+        benchIds:   squad.filter((p) => !p.isStarting).map((p) => p.id),
+        captainId,
+        viceId,
+      }));
+    } catch { /* storage unavailable */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [squad, captainId, viceId]);
 
   function applyFormation(f: string) {
     const split = splitStartingXI(squad, f);
@@ -251,6 +299,7 @@ export function SquadPicker({
         viceId,
       });
       if (res.ok) {
+        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
         router.push("/team");
         router.refresh();
       } else {
@@ -312,6 +361,15 @@ export function SquadPicker({
       </div>
 
       <BudgetBar spent={validation.spent} count={validation.total} bonusBudget={budgetBonus} />
+
+      {showDraftBanner && (
+        <div className="valid-msgs" style={{ marginTop: 12 }}>
+          <div className="vmsg ok">
+            <span className="ic"><Icon name="check" size={16} /></span>
+            Draft restored — your last session is back.
+          </div>
+        </div>
+      )}
 
       {validation.errors.map((e, i) => (
         <div className="valid-msgs" style={{ marginTop: i === 0 ? 12 : 8 }} key={i}>
