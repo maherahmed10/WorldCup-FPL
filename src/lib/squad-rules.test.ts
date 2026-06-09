@@ -196,10 +196,22 @@ test("formationName identifies each allowed formation", () => {
   assert.equal(formationName(xi(5, 3, 2)), "5-3-2");
 });
 
-test("5-4-1 satisfies loose bounds but is NOT an allowed formation", () => {
+test("5-4-1 is now an allowed named formation", () => {
   const shape = xi(5, 4, 1);
   assert.equal(isValidFormation(shape), true); // within line bounds
-  assert.equal(isNamedFormation(shape), false); // but not a named formation
+  assert.equal(isNamedFormation(shape), true); // and a named formation
+  assert.equal(formationName(shape), "5-4-1");
+});
+
+test("5-2-3 is now an allowed named formation", () => {
+  const shape = xi(5, 2, 3);
+  assert.equal(isNamedFormation(shape), true);
+  assert.equal(formationName(shape), "5-2-3");
+});
+
+test("4-1-5 is still NOT an allowed formation (too few mids)", () => {
+  const shape = xi(4, 1, 5);
+  assert.equal(isNamedFormation(shape), false);
   assert.equal(formationName(shape), null);
 });
 
@@ -210,11 +222,18 @@ test("canSwap: 4-3-3 → sub a FWD for a MID gives 4-4-2 (allowed)", () => {
   assert.equal(canSwap(starters, fwdOut, midIn), true);
 });
 
-test("canSwap: 4-4-2 → sub a FWD for a DEF would give 5-4-1 (rejected)", () => {
+test("canSwap: 4-4-2 → sub a FWD for a DEF gives 5-4-1 (now allowed)", () => {
   const starters = xi(4, 4, 2);
   const fwdOut = starters.find((p) => p.position === "FWD")!;
   const defIn = mk("DEF", 50, "Z");
-  assert.equal(canSwap(starters, fwdOut, defIn), false);
+  assert.equal(canSwap(starters, fwdOut, defIn), true);
+});
+
+test("canSwap: 4-4-2 → sub a MID for a DEF gives 5-3-2 (allowed)", () => {
+  const starters = xi(4, 4, 2);
+  const midOut = starters.find((p) => p.position === "MID")!;
+  const defIn = mk("DEF", 50, "Z");
+  assert.equal(canSwap(starters, midOut, defIn), true); // 5-3-2 is a named formation
 });
 
 test("canSwap: same-position sub is always allowed", () => {
