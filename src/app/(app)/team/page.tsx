@@ -24,6 +24,8 @@ import type { PerkLike } from "@/lib/store";
 import { TeamNamePrompt } from "./TeamNamePrompt";
 import { CaptainPanel } from "./CaptainPanel";
 import { MiniStore } from "@/components/MiniStore";
+import { RankBoard } from "@/components/RankBoard";
+import { getGlobalLeaderboard } from "@/lib/leaderboard";
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -118,6 +120,9 @@ export default async function TeamPage() {
   const ownedPerks = rawPerks as PerkLike[];
   const isGroupStage = !(gameweek?.isKnockout ?? false);
 
+  // Global rank board (added at the top — see leaderboard.ts).
+  const leaderboard = await getGlobalLeaderboard({ userId: user.id, gameweekId: gameweek!.id });
+
   return (
     <div className="screen">
       <div className="screen-head head-row">
@@ -129,6 +134,10 @@ export default async function TeamPage() {
           <Icon name="settings" size={16} />
           Edit Squad
         </Link>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <RankBoard data={leaderboard} />
       </div>
 
       <div className="grid-stats">
