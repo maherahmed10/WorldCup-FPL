@@ -44,10 +44,14 @@ export function WelcomeModal({ firstLogin }: { firstLogin: boolean }) {
     startTransition(() => {
       setOnboarded();
     });
+    router.push("/squad");
   }
 
   function replay() {
-    dismiss();
+    setOpen(false);
+    startTransition(() => {
+      setOnboarded();
+    });
     router.push("/home");
   }
 
