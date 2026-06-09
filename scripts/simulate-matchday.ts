@@ -34,6 +34,12 @@ import {
   assistMultiplier,
 } from "../src/lib/betting";
 
+// How far to pull a simulated gameweek's dates into the PAST so the app's
+// date-based gates (deadline lock, rival-squad unlock, banner advance, transfer
+// window) behave as if the matches really happened. Reset shifts back by the
+// same amount. Guarded so re-running sim without reset never double-shifts.
+const BACKDATE_MS = 120 * 24 * 60 * 60 * 1000; // 120 days
+
 // ── seeded RNG (mulberry32) ──────────────────────────────────────────────
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -191,10 +197,14 @@ async function simulateGameweek(label: string) {
     // ── match-stats view rows (lineups / events / statistics) ──
     await writeMatchStatsRows(f, homePlayers, awayPlayers, homeLines, awayLines, r);
 
-    // ── mark fixture finished ──
+    // ── mark fixture finished + backdate its kickoff into the past so the app
+    //    treats it as already played (only shift if still in the future) ──
+    const newKickoff = f.kickoff.getTime() > Date.now() - BACKDATE_MS
+      ? new Date(f.kickoff.getTime() - BACKDATE_MS)
+      : f.kickoff;
     await db.fixture.update({
       where: { id: f.id },
-      data: { status: "FINISHED", homeScore: homeGoals, awayScore: awayGoals },
+      data: { status: "FINISHED", homeScore: homeGoals, awayScore: awayGoals, kickoff: newKickoff },
     });
 
     // ── settle wagers on this fixture (DB-only, same as production) ──
@@ -204,6 +214,16 @@ async function simulateGameweek(label: string) {
     const h = await settleH2HChallenges(f.id);
 
     console.log(`  ✓ ${f.homeTeam.name} ${homeGoals}-${awayGoals} ${f.awayTeam.name}  ·  ${written} stats · settled ${b} bets / ${pp} props / ${pl} parlays / ${h} H2H`);
+  }
+
+  // ── backdate the gameweek's DEADLINE into the past (only if still future) so
+  //    rival squads unlock, the banner advances, and the round reads as played ──
+  if (gw.deadline.getTime() > Date.now() - BACKDATE_MS) {
+    await db.gameweek.update({
+      where: { id: gw.id },
+      data: { deadline: new Date(gw.deadline.getTime() - BACKDATE_MS) },
+    });
+    console.log(`  ✓ backdated "${label}" deadline into the past (rival squads now unlock, banner advances)`);
   }
 }
 
@@ -367,8 +387,19 @@ async function resetGameweek(label: string, hard: boolean) {
   await db.matchLineup.deleteMany({ where: { fixtureId: { in: fixtureIds } } });
   await db.playerMatchStat.deleteMany({ where: { fixtureId: { in: fixtureIds } } });
 
-  // 2) fixtures back to SCHEDULED
+  // 2) fixtures back to SCHEDULED + un-backdate kickoffs (shift forward by the
+  //    same amount the sim shifted them back). Guard: only shift fixtures that
+  //    look backdated (kickoff sits in the far past), so reset is idempotent.
   await db.fixture.updateMany({ where: { id: { in: fixtureIds } }, data: { status: "SCHEDULED", homeScore: null, awayScore: null } });
+  const cutoff = new Date(Date.now() - BACKDATE_MS + 14 * 24 * 60 * 60 * 1000); // backdated → before this
+  const backdatedFx = await db.fixture.findMany({ where: { id: { in: fixtureIds }, kickoff: { lt: cutoff } }, select: { id: true, kickoff: true } });
+  for (const f of backdatedFx) {
+    await db.fixture.update({ where: { id: f.id }, data: { kickoff: new Date(f.kickoff.getTime() + BACKDATE_MS) } });
+  }
+  // un-backdate the gameweek deadline if it was shifted
+  if (gw.deadline < cutoff) {
+    await db.gameweek.update({ where: { id: gw.id }, data: { deadline: new Date(gw.deadline.getTime() + BACKDATE_MS) } });
+  }
 
   // 3) re-open wagers touching these fixtures
   await db.bet.updateMany({ where: { fixtureId: { in: fixtureIds }, status: { in: ["WON", "LOST", "VOID"] } }, data: { status: "OPEN", payout: null } });
