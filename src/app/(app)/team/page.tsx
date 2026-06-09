@@ -22,7 +22,6 @@ import {
 import { totalPrice } from "@/lib/squad-rules";
 import type { PerkLike } from "@/lib/store";
 import { TeamNamePrompt } from "./TeamNamePrompt";
-import { CaptainPanel } from "./CaptainPanel";
 import { MiniStore } from "@/components/MiniStore";
 import { RankBoard } from "@/components/RankBoard";
 import { getGlobalLeaderboard } from "@/lib/leaderboard";
@@ -93,7 +92,6 @@ export default async function TeamPage() {
   });
   const captainId = pick?.captainId ?? squad.captainId;
   const viceId = pick?.viceId ?? null;
-  const deadlinePassed = deadlineMs <= Date.now();
 
   // Real points from settled PlayerMatchStat (0 until matches are played + settled).
   const gwPoints = await getGameweekPlayerPoints(
@@ -106,11 +104,6 @@ export default async function TeamPage() {
   );
   const gwTotal = squadGameweekTotal(squad.players, captainId, gwPoints, viceId, gwMinutes);
   const seasonTotal = await getUserSeasonTotal(user.id);
-
-  // Starters as options for the captain/vice picker.
-  const starterOptions = squad.players
-    .filter((p) => p.isStarting)
-    .map((p) => ({ id: p.id, name: p.name, position: p.position, country: p.country }));
 
   // Store data for mini store panel
   const rawPerks = await db.userPerk.findMany({
@@ -167,15 +160,7 @@ export default async function TeamPage() {
           </div>
         </div>
         <div>
-          <CaptainPanel
-            gameweekId={gameweek!.id}
-            gameweekLabel={gameweek?.label ?? ""}
-            starters={starterOptions}
-            captainId={captainId}
-            viceId={viceId}
-            deadlinePassed={deadlinePassed}
-          />
-          <div className="card" style={{ padding: 16, marginTop: 14 }}>
+          <div className="card" style={{ padding: 16 }}>
             <div className="sum-title" style={{ marginBottom: 10 }}>
               Bench
             </div>
