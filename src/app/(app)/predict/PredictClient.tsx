@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { potentialReturn, type MarketType } from "@/lib/betting";
 import { Flag } from "@/components/Flag";
@@ -25,6 +25,8 @@ export interface MarketGroupView {
 }
 export interface FixtureMarketsView {
   fixtureId: string;
+  homeTeamId: string;
+  awayTeamId: string;
   home: TeamView;
   away: TeamView;
   time: string;
@@ -245,6 +247,14 @@ function FixtureCard({ m, onPick }: { m: FixtureMarketsView; onPick: (s: SlipSta
   );
 }
 
+// Player markets where "+ Other" lets you bet on any squad player.
+const PLAYER_MARKET_KIND: Partial<Record<MarketType, "scorer" | "assist" | "card">> = {
+  PLAYER_SCORER: "scorer",
+  PLAYER_ASSIST: "assist",
+  PLAYER_CARD: "card",
+};
+const selectionPrefix = { scorer: "scorer:", assist: "assist:", card: "card:" } as const;
+
 function MarketGroup({
   g,
   fixture,
@@ -255,6 +265,24 @@ function MarketGroup({
   onPick: (s: SlipState) => void;
 }) {
   const [open, setOpen] = useState(true);
+  // Picker context: which team's full squad to browse for this player market.
+  const [picker, setPicker] = useState<{ teamId: string; teamName: string } | null>(null);
+  // Players chosen via "+ Other" that aren't in the default shortlist — shown inline.
+  const [extras, setExtras] = useState<MarketOptionView[]>([]);
+
+  const kind = PLAYER_MARKET_KIND[g.marketType];
+  const shownSelections = new Set([...g.options, ...extras].map((o) => o.selection));
+
+  const betFor = (o: MarketOptionView): SlipState => ({
+    fixtureId: fixture.fixtureId,
+    home: fixture.home,
+    away: fixture.away,
+    marketType: g.marketType,
+    marketLabel: g.label,
+    pick: o.name,
+    selection: o.selection,
+    multiplier: o.multiplier,
+  });
 
   return (
     <div className="mb-2 last:mb-0">
@@ -268,21 +296,10 @@ function MarketGroup({
       </button>
       {open && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {g.options.map((o) => (
+          {[...g.options, ...extras].map((o) => (
             <button
               key={o.selection}
-              onClick={() =>
-                onPick({
-                  fixtureId: fixture.fixtureId,
-                  home: fixture.home,
-                  away: fixture.away,
-                  marketType: g.marketType,
-                  marketLabel: g.label,
-                  pick: o.name,
-                  selection: o.selection,
-                  multiplier: o.multiplier,
-                })
-              }
+              onClick={() => onPick(betFor(o))}
               className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-[var(--accent)]"
               style={{ background: "var(--surface-2)", borderColor: "var(--line-2)" }}
             >
@@ -292,8 +309,146 @@ function MarketGroup({
               </span>
             </button>
           ))}
+          {/* "+ Other" — one per team, only for player markets. */}
+          {kind && (
+            <>
+              <OtherButton
+                label={`Other ${fixture.home.name}`}
+                onClick={() => setPicker({ teamId: fixture.homeTeamId, teamName: fixture.home.name })}
+              />
+              <OtherButton
+                label={`Other ${fixture.away.name}`}
+                onClick={() => setPicker({ teamId: fixture.awayTeamId, teamName: fixture.away.name })}
+              />
+            </>
+          )}
         </div>
       )}
+
+      {kind && picker && (
+        <TeamMarketPicker
+          teamId={picker.teamId}
+          teamName={picker.teamName}
+          kind={kind}
+          marketLabel={g.label}
+          excludeSelections={shownSelections}
+          onChoose={(row) => {
+            const opt: MarketOptionView = {
+              name: row.name,
+              selection: `${selectionPrefix[kind]}${row.id}`,
+              multiplier: row.odds,
+            };
+            if (!shownSelections.has(opt.selection)) setExtras((e) => [...e, opt]);
+            onPick(betFor(opt)); // open the bet flow straight away
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function OtherButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-2.5 text-[13px] font-semibold transition-colors hover:border-[var(--accent)]"
+      style={{ borderColor: "var(--line-2)", color: "var(--text-3)" }}
+    >
+      <span style={{ fontSize: 15, lineHeight: 1 }}>+</span>
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+interface MarketRow {
+  id: string;
+  name: string;
+  position: "DEF" | "MID" | "FWD";
+  odds: number;
+}
+
+function TeamMarketPicker({
+  teamId,
+  teamName,
+  kind,
+  marketLabel,
+  excludeSelections,
+  onChoose,
+  onClose,
+}: {
+  teamId: string;
+  teamName: string;
+  kind: "scorer" | "assist" | "card";
+  marketLabel: string;
+  excludeSelections: Set<string>;
+  onChoose: (row: MarketRow) => void;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<MarketRow[] | null>(null);
+  const [q, setQ] = useState("");
+
+  // Load the team's full market roster on open.
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/team-market/${teamId}/${kind}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: MarketRow[]) => alive && setRows(data))
+      .catch(() => alive && setRows([]));
+    return () => {
+      alive = false;
+    };
+  }, [teamId, kind]);
+
+  const list = (rows ?? []).filter(
+    (r) =>
+      !excludeSelections.has(`${selectionPrefix[kind]}${r.id}`) &&
+      (!q.trim() || r.name.toLowerCase().includes(q.toLowerCase())),
+  );
+
+  return (
+    <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" onMouseDown={(e) => e.stopPropagation()} style={{ animation: "popIn .2s ease", maxWidth: 460 }}>
+        <div className="flex items-center justify-between px-4 pt-4">
+          <div className="text-base font-bold">{marketLabel} · {teamName}</div>
+          <button onClick={onClose} style={{ color: "var(--text-3)" }} aria-label="Close">✕</button>
+        </div>
+        <div style={{ padding: "10px 16px 16px" }}>
+          <input
+            className="fld"
+            placeholder={`Search ${teamName} squad…`}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            autoFocus
+            style={{ marginBottom: 10, width: "100%" }}
+          />
+          <div style={{ maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+            {list.length === 0 ? (
+              <div style={{ textAlign: "center", color: "var(--text-3)", padding: "24px 0", fontSize: 14 }}>
+                {rows === null ? "Loading…" : "No more players match."}
+              </div>
+            ) : (
+              list.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => onChoose(r)}
+                  className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-[var(--accent)]"
+                  style={{ background: "var(--surface-2)", borderColor: "var(--line-2)" }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={"pos pos-" + r.position}>{r.position}</span>
+                    <span className="truncate text-[13px] font-semibold">{r.name}</span>
+                  </span>
+                  <span className="num text-sm font-bold" style={{ color: "var(--accent)" }}>
+                    {r.odds.toFixed(2)}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

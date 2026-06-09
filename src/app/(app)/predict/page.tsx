@@ -181,6 +181,8 @@ export default async function PredictPage() {
     }
     return {
       fixtureId: f.id,
+      homeTeamId: f.homeTeamId,
+      awayTeamId: f.awayTeamId,
       home: { name: f.homeTeam.name, logoUrl: f.homeTeam.logoUrl },
       away: { name: f.awayTeam.name, logoUrl: f.awayTeam.logoUrl },
       time: formatKickoff(f.kickoff),
