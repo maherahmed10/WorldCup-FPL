@@ -16,6 +16,7 @@
     "seed": "tsx prisma/seed.ts",
     "sync": "tsx src/jobs/sync.ts",
     "settle": "tsx src/jobs/settle.ts",
+    "simulate": "tsx scripts/simulate-matchday.ts",
     "load-prices": "tsx scripts/load-prices.ts",
     "price-review": "tsx scripts/price-review.ts",
     "test": "tsx --test src/**/*.test.ts"

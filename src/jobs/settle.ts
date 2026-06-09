@@ -27,7 +27,7 @@ function n(v: number | null | undefined): number {
 // Resolve OPEN player-prop bets on a fixture from the just-written PlayerMatchStat
 // rows (ROADMAP 3.4). Idempotent — only touches OPEN bets, so re-running is safe.
 // Match-market settlement (HOME/OVER_2.5/…) is ROADMAP 1.1.
-async function settlePlayerPropBets(fixtureId: string): Promise<number> {
+export async function settlePlayerPropBets(fixtureId: string): Promise<number> {
   const bets = await db.bet.findMany({
     where: {
       fixtureId,
