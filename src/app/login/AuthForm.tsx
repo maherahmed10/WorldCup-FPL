@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/Icon";
@@ -55,8 +56,10 @@ export function AuthForm() {
   return (
     <div className="auth-card">
       <div className="brand auth-card-brand">
-        <div className="brand-mark">G</div>
-        <div className="brand-name">GAFFER</div>
+        <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
+          <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+        </div>
+        <div className="brand-name">TapIn</div>
       </div>
       <h2 className="auth-h2">{signup ? "Create your account" : "Welcome back"}</h2>
       <p className="auth-p">
@@ -121,7 +124,7 @@ export function AuthForm() {
       </form>
 
       <p className="auth-switch">
-        {signup ? "Already have an account? " : "New to GAFFER? "}
+        {signup ? "Already have an account? " : "New to TapIn? "}
         <button onClick={() => setMode(signup ? "login" : "signup")} type="button">
           {signup ? "Log in" : "Sign up"}
         </button>

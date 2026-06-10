@@ -6,6 +6,7 @@
 // double-flashes before the server round-trips. Reuses <HowToPlayDeck compact />.
 
 import { useEffect, useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { HowToPlayDeck } from "@/components/HowToPlayDeck";
@@ -65,8 +66,10 @@ export function WelcomeModal({ firstLogin }: { firstLogin: boolean }) {
             <Icon name="close" size={18} />
           </button>
           <div className="brand">
-            <div className="brand-mark">G</div>
-            <div className="brand-name">GAFFER</div>
+            <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
+                <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+              </div>
+              <div className="brand-name">TapIn</div>
           </div>
           <div className="wm-welcome">
             Welcome to the <span className="g">game</span>.

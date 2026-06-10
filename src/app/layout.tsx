@@ -17,7 +17,7 @@ const sans = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "GAFFER — World Cup 2026 Fantasy",
+  title: "TapIn — World Cup 2026 Fantasy",
   description:
     "FPL-style fantasy game for the 2026 World Cup with a points-only predictions layer.",
 };

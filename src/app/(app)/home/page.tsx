@@ -1,6 +1,7 @@
 // Home screen (design handoff: home/app.jsx). Lives inside the app shell:
 // a compact athletic hero band + the "How to play" click-through guide.
 // Reached from the "Home" nav item and by clicking the GAFFER brand.
+import Image from "next/image";
 import { Flag } from "@/components/Flag";
 import { HowToPlayDeck } from "@/components/HowToPlayDeck";
 
@@ -14,8 +15,10 @@ export default function HomePage() {
     <div className="screen">
       <section className="home-hero">
         <div className="hh-brand">
-          <div className="brand-mark">G</div>
-          <div className="brand-name">GAFFER</div>
+          <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
+            <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+          </div>
+          <div className="brand-name">TapIn</div>
         </div>
         <div className="hh-kicker">
           <span className="live-dot" style={{ background: "var(--accent)" }} /> World Cup 2026

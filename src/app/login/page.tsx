@@ -1,5 +1,6 @@
 // Login / signup page (public). Ported from design/screens_auth.jsx.
 // Server component: if already signed in, bounce to /team.
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AuthForm } from "./AuthForm";
@@ -20,8 +21,10 @@ export default async function LoginPage() {
       <div className="auth-hero">
         <div className="auth-hero-content">
           <div className="brand" style={{ padding: 0, marginBottom: 34 }}>
-            <div className="brand-mark">G</div>
-            <div className="brand-name">GAFFER</div>
+            <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
+              <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+            </div>
+            <div className="brand-name">TapIn</div>
           </div>
           <h1 className="auth-title">
             Pick your squad.
