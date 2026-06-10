@@ -65,6 +65,9 @@ export function SquadPicker({
   ownedPerks = [],
   isGroupStage = true,
   lockRoster = false,
+  transferMode = false,
+  transfersUsed = 0,
+  transferLimit = 3,
   initialFavouriteIds = [],
 }: {
   pool: PickerPlayer[];
@@ -78,9 +81,13 @@ export function SquadPicker({
   budgetBonus?: number;
   ownedPerks?: PerkLike[];
   isGroupStage?: boolean;
-  // When true the 15 are LOCKED — only XI reorder + captain/vice are editable
-  // (the 15 change only via /transfers). False only on the first-ever pick.
+  // When true the 15 are LOCKED — only XI reorder + captain/vice are editable.
+  // False only on the first-ever pick. In transferMode the lock relaxes: players
+  // can be swapped right here (each new player = one transfer, limited per round).
   lockRoster?: boolean;
+  transferMode?: boolean;
+  transfersUsed?: number; // transfers already saved this round
+  transferLimit?: number; // 3 + unused Extra Transfer perks
   initialFavouriteIds?: string[];
 }) {
   const router = useRouter();
@@ -145,6 +152,16 @@ export function SquadPicker({
   const [viceId, setViceId] = useState<string | null>(
     restoredDraft?.viceId ?? initialViceId,
   );
+  // The roster can be edited on the first-ever pick, or in a knockout transfer
+  // window (where every NEW player counts as one transfer).
+  const canEditRoster = !lockRoster || transferMode;
+  // The 15 the edit session started from — new players are counted against it.
+  const [originalIds] = useState<Set<string>>(
+    () => new Set([...initialStarterIds, ...initialBenchIds]),
+  );
+  // A starter/bench player picked via the menu's "Substitute" — the next tap on
+  // an eligible (highlighted) player completes the swap.
+  const [subSourceId, setSubSourceId] = useState<string | null>(null);
   // Which slot the picker is filling: a position + whether it's a pitch (starter)
   // slot or a bench slot. null = picker closed.
   const [pickerFor, setPickerFor] = useState<{ pos: Position; starter: boolean } | null>(null);
@@ -211,6 +228,29 @@ export function SquadPicker({
   const shapeStr = `${starterCounts.DEF}-${starterCounts.MID}-${starterCounts.FWD}`;
   const formationOk = currentFormation !== null;
 
+  // Transfers pending in THIS edit = players in the squad who weren't in the
+  // original 15. (Removing and re-adding the same player counts as zero.)
+  const transfersMade = transferMode
+    ? squad.filter((p) => !originalIds.has(p.id)).length
+    : 0;
+  const transfersLeft = Math.max(0, transferLimit - transfersUsed - transfersMade);
+
+  // Substitute pick-mode: who can the picked player legally swap with?
+  const subSource = subSourceId ? squad.find((p) => p.id === subSourceId) ?? null : null;
+  const subEligibleIds = useMemo(() => {
+    if (!subSource) return new Set<string>();
+    const others = subSource.isStarting ? bench : starters;
+    return new Set(
+      others
+        .filter((o) =>
+          subSource.isStarting ? canSwap(starters, subSource, o) : canSwap(starters, o, subSource),
+        )
+        .map((o) => o.id),
+    );
+    // starters/bench derive from squad; subSource identity covers the rest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subSource, squad]);
+
   // ── squad mutations ──
   function addPlayer(p: PickerPlayer) {
     // Hard guard: never exceed the squad quota for a position (2 GK/5 DEF/5 MID/3 FWD).
@@ -253,32 +293,47 @@ export function SquadPicker({
   }
 
   // Tapping a pitch/bench token opens its action menu — UNLESS the tap is the
-  // synthetic click that follows a drag (draggedRef set in onDragStart). Drag
-  // still swaps directly; a genuine tap opens the menu (profile lives there).
+  // synthetic click that follows a drag (draggedRef set in onDragStart), or
+  // we're in substitute pick-mode (then the tap picks the swap target).
   function handleTokenTap(id: string) {
     if (draggedRef.current) {
       draggedRef.current = false;
       return;
     }
+    if (subSourceId) {
+      if (id === subSourceId) {
+        setSubSourceId(null); // tap the same player again = cancel
+        return;
+      }
+      if (subEligibleIds.has(id)) {
+        trySwap(subSourceId, id);
+        setSubSourceId(null);
+        return;
+      }
+      setMessage("Tap one of the highlighted players to complete the substitution — or Cancel.");
+      return;
+    }
     setActionMenuId(id);
   }
 
-  // Auto-substitute: swap a benched player into the XI for the first valid
-  // same-or-compatible starter (used by the menu's "Substitute" item).
-  function autoSubstitute(id: string) {
+  // Menu's "Substitute": enter pick-mode — highlight every legal swap partner
+  // and let the user choose (no more auto-picking for them).
+  function startSubstitute(id: string) {
     const p = squad.find((x) => x.id === id);
     if (!p) return;
-    if (p.isStarting) {
-      // starter → find a bench player that can take its place
-      const target = bench.find((b) => canSwap(starters, p, b));
-      if (target) trySwap(p.id, target.id);
-      else setMessage("No valid substitute on the bench for that player.");
-    } else {
-      // bench → find a starter it can replace
-      const target = starters.find((s) => canSwap(starters, s, p));
-      if (target) trySwap(p.id, target.id);
-      else setMessage("That sub can't replace any starter without breaking the formation.");
+    const anyEligible = (p.isStarting ? bench : starters).some((o) =>
+      p.isStarting ? canSwap(starters, p, o) : canSwap(starters, o, p),
+    );
+    if (!anyEligible) {
+      setMessage(
+        p.isStarting
+          ? "No one on the bench can replace that player without breaking the formation."
+          : "That sub can't replace any starter without breaking the formation.",
+      );
+      return;
     }
+    setMessage(null);
+    setSubSourceId(id);
   }
 
   function applyBestLineup(players: PickerPlayer[]) {
@@ -332,6 +387,12 @@ export function SquadPicker({
     setMessage(null);
     if (!formationOk) {
       setMessage("Your starting 11 isn't a valid formation yet.");
+      return;
+    }
+    if (transferMode && transfersUsed + transfersMade > transferLimit) {
+      setMessage(
+        `That's ${transfersMade} new player${transfersMade === 1 ? "" : "s"} but you only have ${Math.max(0, transferLimit - transfersUsed)} transfer${transferLimit - transfersUsed === 1 ? "" : "s"} left this round.`,
+      );
       return;
     }
     if (!captainId || !viceId) {
@@ -390,25 +451,79 @@ export function SquadPicker({
         <div>
           <h1>{lockRoster ? "Edit Your Team" : "Pick Your Team"}</h1>
           <div className="sub">
-            {lockRoster
-              ? "Your 15 are locked — set your starting XI, captain & vice. Change players in Transfers."
-              : "Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap."}
+            {transferMode
+              ? "Transfer window open — swap players right here: remove a player, then fill the slot."
+              : lockRoster
+                ? "Your 15 are locked — set your starting XI, captain & vice."
+                : "Build a 15-player squad within £100m. Max 3 per country. Drag a sub onto a starter to swap."}
             {gameweekLabel ? ` · ${gameweekLabel}` : ""}
           </div>
         </div>
-        {/* Green + clickable once the squad/formation are valid — clicking
-            without a captain & vice shows a message rather than silently failing. */}
-        <button
-          className="btn btn-primary"
-          disabled={!validation.valid || !formationOk || saving}
-          onClick={handleSave}
-        >
-          <Icon name="check" size={17} />
-          {saving ? "Saving…" : "Save Team"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Transfers remaining — prominent in the header during a knockout window. */}
+          {transferMode && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 2,
+                padding: "6px 12px",
+                borderRadius: 12,
+                border: "1px solid var(--line)",
+                background: "var(--surface-2)",
+              }}
+              title="Each knockout round grants 3 transfers. Unused ones carry over to the next round."
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  color: "var(--text-3)",
+                }}
+              >
+                Transfers left
+              </span>
+              <span
+                style={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  fontVariantNumeric: "tabular-nums",
+                  color: transfersLeft === 0 ? "var(--live)" : "var(--accent)",
+                }}
+              >
+                {transfersLeft}
+                <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>
+                  {" "}/ {transferLimit}
+                </span>
+              </span>
+            </div>
+          )}
+          {/* Green + clickable once the squad/formation are valid — clicking
+              without a captain & vice shows a message rather than silently failing. */}
+          <button
+            className="btn btn-primary"
+            disabled={!validation.valid || !formationOk || saving}
+            onClick={handleSave}
+          >
+            <Icon name="check" size={17} />
+            {saving ? "Saving…" : "Save Team"}
+          </button>
+        </div>
       </div>
 
-      <BudgetBar spent={validation.spent} count={validation.total} bonusBudget={budgetBonus} />
+      <BudgetBar
+        spent={validation.spent}
+        count={validation.total}
+        bonusBudget={budgetBonus}
+        note={
+          isGroupStage
+            ? "Make bets to earn money — you can use it to strengthen your squad in the knockouts."
+            : "Now you can use money you made from betting to strengthen your squad."
+        }
+      />
 
       <div className="banner open" style={{ marginTop: 12 }}>
         <div className="banner-l">
@@ -509,7 +624,60 @@ export function SquadPicker({
               </span>
             )}
           </div>
-          {lockRoster && (
+          {subSource && (
+            <div
+              className="vmsg"
+              style={{
+                marginBottom: 10,
+                background: "rgba(24,224,138,0.08)",
+                border: "1px solid rgba(24,224,138,0.3)",
+                borderRadius: 10,
+                padding: "9px 12px",
+                fontSize: 12,
+                color: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+              }}
+            >
+              <Icon name="swap" size={15} />
+              <span style={{ flex: 1 }}>
+                Substituting <b>{lastName(subSource.name)}</b> — tap a highlighted player to swap.
+              </span>
+              <button
+                className="pill"
+                style={{ cursor: "pointer" }}
+                onClick={() => setSubSourceId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {!subSource && transferMode && (
+            <div
+              className="vmsg"
+              style={{
+                marginBottom: 10,
+                background: "rgba(24,224,138,0.08)",
+                border: "1px solid rgba(24,224,138,0.3)",
+                borderRadius: 10,
+                padding: "9px 12px",
+                fontSize: 12,
+                color: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+              }}
+            >
+              <Icon name="swap" size={15} />
+              <span style={{ flex: 1 }}>
+                <b>{transfersLeft}</b> transfer{transfersLeft === 1 ? "" : "s"} left
+                {transfersMade > 0 && <> ({transfersMade} used in this edit)</>}
+                {" — "}tap a player → Transfer out, then tap the empty slot to buy a replacement. Unused transfers carry over to the next round.
+              </span>
+            </div>
+          )}
+          {!subSource && !transferMode && lockRoster && (
             <div
               className="vmsg"
               style={{
@@ -526,7 +694,7 @@ export function SquadPicker({
               }}
             >
               <Icon name="info" size={15} />
-              Your 15 are locked — change your starting XI, captain &amp; vice. Swap players in Transfers.
+              Your 15 are locked — change your starting XI, captain &amp; vice. Player transfers open in the knockout rounds.
             </div>
           )}
           <div className="pitch-wrap">
@@ -534,9 +702,11 @@ export function SquadPicker({
               rows={pitchRows}
               captainId={captainId}
               viceId={viceId}
-              onEmpty={(pos) => { if (!lockRoster) setPickerFor({ pos, starter: true }); }}
+              onEmpty={(pos) => { if (canEditRoster) setPickerFor({ pos, starter: true }); }}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
+              subSourceId={subSourceId}
+              subEligibleIds={subEligibleIds}
               draggedRef={draggedRef}
               draggingId={draggingId}
               dragOverId={dragOverId}
@@ -551,8 +721,10 @@ export function SquadPicker({
               viceId={viceId}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
-              onAdd={(pos) => { if (!lockRoster) setPickerFor({ pos, starter: false }); }}
+              onAdd={(pos) => { if (canEditRoster) setPickerFor({ pos, starter: false }); }}
               byPos={byPos}
+              subSourceId={subSourceId}
+              subEligibleIds={subEligibleIds}
               draggedRef={draggedRef}
               draggingId={draggingId}
               dragOverId={dragOverId}
@@ -571,6 +743,9 @@ export function SquadPicker({
             viceId={viceId}
             countryCounts={countryCounts}
             maxPerCountry={maxPerCountry}
+            transferMode={transferMode}
+            transfersLeft={transfersLeft}
+            transferLimit={transferLimit}
           />
           <MiniStore
             balance={balance}
@@ -607,11 +782,12 @@ export function SquadPicker({
             player={p}
             isCaptain={captainId === p.id}
             isVice={viceId === p.id}
-            canRemove={!lockRoster}
+            canRemove={canEditRoster}
+            removeLabel={transferMode ? "Transfer out" : "Remove from squad"}
             onViewProfile={() => { setProfileId(p.id); close(); }}
             onCaptain={() => { setCaptainId(p.id); if (viceId === p.id) setViceId(null); close(); }}
             onVice={() => { setViceId(p.id); if (captainId === p.id) setCaptainId(null); close(); }}
-            onSubstitute={() => { autoSubstitute(p.id); close(); }}
+            onSubstitute={() => { startSubstitute(p.id); close(); }}
             onRemove={() => { removePlayer(p.id); close(); }}
             onClose={close}
           />
@@ -633,6 +809,7 @@ function PlayerActionMenu({
   isCaptain,
   isVice,
   canRemove,
+  removeLabel = "Remove from squad",
   onViewProfile,
   onCaptain,
   onVice,
@@ -644,6 +821,7 @@ function PlayerActionMenu({
   isCaptain: boolean;
   isVice: boolean;
   canRemove: boolean;
+  removeLabel?: string;
   onViewProfile: () => void;
   onCaptain: () => void;
   onVice: () => void;
@@ -678,7 +856,7 @@ function PlayerActionMenu({
           <Item icon="user" label={isVice ? "Vice-captain — selected" : "Make Vice-captain"} onClick={onVice} />
           <Item icon="swap" label="Substitute" onClick={onSubstitute} />
           {canRemove && (
-            <Item icon="swap" label="Remove from squad" onClick={onRemove} tone="live" />
+            <Item icon="swap" label={removeLabel} onClick={onRemove} tone="live" />
           )}
         </div>
         <div style={{ padding: "0 18px 18px" }}>
@@ -697,6 +875,9 @@ function PlayerToken({
   isVice,
   onTap,
   onDropSwap,
+  isSubSource = false,
+  isSubEligible = false,
+  subModeActive = false,
   draggedRef,
   isDragging,
   isDragOver,
@@ -710,6 +891,9 @@ function PlayerToken({
   isVice: boolean;
   onTap: () => void;
   onDropSwap: (draggedId: string) => void;
+  isSubSource?: boolean; // the player being substituted (pick-mode)
+  isSubEligible?: boolean; // a legal swap target (pick-mode)
+  subModeActive?: boolean; // pick-mode on → dim everyone else
   draggedRef: React.MutableRefObject<boolean>;
   isDragging: boolean;
   isDragOver: boolean;
@@ -723,9 +907,20 @@ function PlayerToken({
       className="slot"
       draggable
       style={{
-        opacity: isDragging ? 0.32 : 1,
+        opacity: isDragging ? 0.32 : subModeActive && !isSubSource && !isSubEligible ? 0.35 : 1,
         transition: "opacity .12s, transform .15s",
         cursor: isDragging ? "grabbing" : "grab",
+        ...(isSubEligible && {
+          outline: "2px solid var(--accent)",
+          outlineOffset: "3px",
+          borderRadius: 12,
+          boxShadow: "0 0 0 5px rgba(24,224,138,0.18)",
+        }),
+        ...(isSubSource && {
+          outline: "2px solid var(--gold)",
+          outlineOffset: "3px",
+          borderRadius: 12,
+        }),
         ...(isDragOver && {
           outline: "2px solid var(--accent)",
           outlineOffset: "3px",
@@ -777,6 +972,8 @@ function Pitch({
   onEmpty,
   onTapPlayer,
   onSwap,
+  subSourceId,
+  subEligibleIds,
   draggedRef,
   draggingId,
   dragOverId,
@@ -791,6 +988,8 @@ function Pitch({
   onEmpty: (pos: Position) => void;
   onTapPlayer: (id: string) => void;
   onSwap: (aId: string, bId: string) => boolean;
+  subSourceId: string | null;
+  subEligibleIds: Set<string>;
   draggedRef: React.MutableRefObject<boolean>;
   draggingId: string | null;
   dragOverId: string | null;
@@ -826,6 +1025,9 @@ function Pitch({
                     isVice={slot.player.id === viceId}
                     onTap={() => onTapPlayer(slot.player!.id)}
                     onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
+                    isSubSource={slot.player.id === subSourceId}
+                    isSubEligible={subEligibleIds.has(slot.player.id)}
+                    subModeActive={subSourceId !== null}
                     draggedRef={draggedRef}
                     isDragging={draggingId === slot.player.id}
                     isDragOver={dragOverId === slot.player.id}
@@ -873,6 +1075,8 @@ function BenchRow({
   onSwap,
   onAdd,
   byPos,
+  subSourceId,
+  subEligibleIds,
   draggedRef,
   draggingId,
   dragOverId,
@@ -888,6 +1092,8 @@ function BenchRow({
   onSwap: (aId: string, bId: string) => boolean;
   onAdd: (pos: Position) => void;
   byPos: Record<Position, number>;
+  subSourceId: string | null;
+  subEligibleIds: Set<string>;
   draggedRef: React.MutableRefObject<boolean>;
   draggingId: string | null;
   dragOverId: string | null;
@@ -911,15 +1117,27 @@ function BenchRow({
         {bench.map((p) => {
           const isDragging = draggingId === p.id;
           const isDragOver = dragOverId === p.id;
+          const isSubSource = p.id === subSourceId;
+          const isSubEligible = subEligibleIds.has(p.id);
+          const subModeActive = subSourceId !== null;
           return (
             <div
               key={p.id}
               className="bench-slot"
               draggable
               style={{
-                opacity: isDragging ? 0.32 : 1,
+                opacity: isDragging ? 0.32 : subModeActive && !isSubSource && !isSubEligible ? 0.35 : 1,
                 transition: "opacity .12s, transform .15s, box-shadow .15s",
                 cursor: isDragging ? "grabbing" : "grab",
+                ...(isSubEligible && {
+                  outline: "2px solid var(--accent)",
+                  outlineOffset: "3px",
+                  boxShadow: "0 0 0 5px rgba(24,224,138,0.18)",
+                }),
+                ...(isSubSource && {
+                  outline: "2px solid var(--gold)",
+                  outlineOffset: "3px",
+                }),
                 ...(isDragOver && {
                   outline: "2px solid var(--accent)",
                   outlineOffset: "3px",
@@ -978,18 +1196,44 @@ function SquadSummary({
   viceId,
   countryCounts,
   maxPerCountry,
+  transferMode = false,
+  transfersLeft = 0,
+  transferLimit = 0,
 }: {
   squad: SquadEntry[];
   captainId: string | null;
   viceId: string | null;
   countryCounts: Record<string, number>;
   maxPerCountry: number;
+  transferMode?: boolean;
+  transfersLeft?: number;
+  transferLimit?: number;
 }) {
   const captain = squad.find((p) => p.id === captainId) ?? null;
   const vice = squad.find((p) => p.id === viceId) ?? null;
   const entries = Object.entries(countryCounts).sort((a, b) => b[1] - a[1]);
   return (
     <div className="card" style={{ padding: 16 }}>
+      {transferMode && (
+        <>
+          <div className="sum-row">
+            <span className="muted">Transfers left</span>
+            <span
+              className="num"
+              style={{
+                fontWeight: 800,
+                color: transfersLeft === 0 ? "var(--live)" : "var(--accent)",
+              }}
+            >
+              {transfersLeft} / {transferLimit}
+            </span>
+          </div>
+          <p className="sum-hint" style={{ marginTop: 2, marginBottom: 6 }}>
+            3 per knockout round — unused ones carry over to the next round.
+          </p>
+          <div className="sum-divider" />
+        </>
+      )}
       <div className="sum-row">
         <span className="muted">Captain</span>
         {captain ? (

@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic"; // standings change after every settleme
 import { db } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { rankStandings } from "@/lib/leagues";
-import { getCurrentGameweek, teamsViewable } from "@/lib/squad-data";
+import { getLastLockedGameweek } from "@/lib/squad-data";
 import { LeaguesClient, type LeagueData } from "@/components/LeaguesClient";
 
 // Local shape for the nested Prisma query result. Keeps callback params typed
@@ -115,8 +115,10 @@ export default async function LeaguesPage() {
     }
   }
 
-  // Rival squads are clickable only once the current transfer window has locked.
-  const canViewTeams = teamsViewable(await getCurrentGameweek());
+  // Rival squads are clickable once ANY round has locked (its deadline passed) —
+  // that round's teams are played and safe to view. During an open knockout
+  // window this is the prior round, so nobody's open-window edit is exposed.
+  const canViewTeams = (await getLastLockedGameweek()) !== null;
 
   return <LeaguesClient leagues={leagues} userId={userId} canViewTeams={canViewTeams} />;
 }

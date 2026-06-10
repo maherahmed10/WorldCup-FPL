@@ -5,8 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { db } from "@/lib/db";
-import { getCurrentGameweek, getActiveSquad } from "@/lib/squad-data";
-import { totalPrice, BUDGET } from "@/lib/squad-rules";
+import { getCurrentGameweek, getViewSquad } from "@/lib/squad-data";
+import { totalPrice } from "@/lib/squad-rules";
+import { ensureKnockoutBudgetMerged, knockoutFunds } from "@/lib/budget-merge";
 
 export default async function AppLayout({
   children,
@@ -39,15 +40,34 @@ export default async function AppLayout({
     db.h2HChallenge.count({ where: { opponentId: user.id, status: "PENDING" } }),
   ]);
 
-  const squad = gameweek ? await getActiveSquad(user.id, gameweek.id) : null;
-  const squadSpent = squad ? totalPrice(squad.players) : 0;
-  const budgetRemaining = BUDGET - squadSpent; // tenths of a million
+  // Knockouts: one money pool. Lazily fold any leftover group-stage budget into
+  // the bank on first knockout load (idempotent), so the bank reflects every £.
+  const isKnockout = gameweek?.isKnockout ?? false;
+  if (isKnockout) await ensureKnockoutBudgetMerged(user.id);
+  // Re-read the bank if the merge may have changed it.
+  const bettingBalance = isKnockout
+    ? (await db.user.findUnique({ where: { id: user.id }, select: { bettingBalance: true } }))?.bettingBalance ??
+      appUser.bettingBalance
+    : appUser.bettingBalance;
+
+  // Carry forward the most recent squad (a user keeps their team across gameweeks).
+  const view = gameweek ? await getViewSquad(user.id, gameweek.startsAt) : null;
+  const squadSpent = view ? totalPrice(view.squad.players) : 0;
+  const funds = knockoutFunds({
+    isKnockout,
+    bettingBalance,
+    squadSpentTenths: squadSpent,
+    squadBudgetBonus: appUser.squadBudgetBonus ?? 0,
+  });
+  const budgetRemaining = funds.squadCapTenths - squadSpent; // tenths of a million
+  const budgetTotal = funds.squadCapTenths; // tenths
 
   return (
     <>
       <AppShell
         user={{ name: appUser.teamName ?? appUser.name, handle: appUser.email }}
         budgetRemaining={budgetRemaining}
+        budgetTotal={budgetTotal}
         pendingH2HCount={pendingH2HCount}
       >
         {children}
