@@ -218,35 +218,36 @@ input { font-family: inherit; }
   border-radius: 999px !important;
   border: 1px solid rgba(255,255,255,0.07) !important;
 }
-/* Back button — recessed, clearly secondary */
+/* Back button — dark, bordered, clearly secondary */
 .driver-popover-footer button {
-  background: rgba(255,255,255,0.05) !important;
-  color: #5E6E84 !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: transparent !important;
+  color: rgba(255,255,255,0.80) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
   border-radius: 9px !important;
   padding: 8px 15px !important;
   font-size: 12px !important;
   font-weight: 700 !important;
   text-shadow: none !important;
-  transition: background .15s, color .15s !important;
+  transition: background .15s, color .15s, border-color .15s !important;
 }
 .driver-popover-footer button:hover,
 .driver-popover-footer button:focus {
-  background: rgba(255,255,255,0.09) !important;
-  color: #C8D3E0 !important;
+  background: rgba(255,255,255,0.07) !important;
+  color: #fff !important;
+  border-color: rgba(255,255,255,0.25) !important;
 }
-/* Next / Done — bright accent, stands out */
+/* Next / Done — solid green, white text, subtle glow */
 .driver-popover-next-btn {
   background: #18E08A !important;
-  color: #042417 !important;
+  color: #fff !important;
   border-color: transparent !important;
-  box-shadow: 0 3px 12px rgba(24,224,138,0.30), inset 0 1px 0 rgba(255,255,255,0.20) !important;
+  box-shadow: 0 4px 16px rgba(24,224,138,0.35) !important;
 }
 .driver-popover-next-btn:hover,
 .driver-popover-next-btn:focus {
   background: #22EE95 !important;
-  color: #042417 !important;
-  box-shadow: 0 4px 18px rgba(24,224,138,0.40) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 20px rgba(24,224,138,0.45) !important;
 }
 /* Arrow: match gradient bottom colour (#181C24) */
 .driver-popover-arrow { border-color: #181C24 !important; }
