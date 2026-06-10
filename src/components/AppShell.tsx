@@ -66,7 +66,7 @@ export function AppShell({
       <aside className="sidebar">
         <Link href="/home" className="brand" style={{ textDecoration: "none", color: "inherit" }}>
           <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
-            <Image src="/logo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+            <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
           </div>
           <div className="brand-name">TapIn</div>
         </Link>
@@ -141,7 +141,7 @@ export function AppShell({
       <header className="topbar">
         <Link href="/home" className="brand" style={{ padding: 0, textDecoration: "none", color: "inherit" }}>
           <div className="brand-mark" style={{ width: 30, height: 30, background: "transparent", boxShadow: "none" }}>
-            <Image src="/logo.png" alt="TapIn" width={30} height={30} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+            <Image src="/TheLogo.png" alt="TapIn" width={30} height={30} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
           </div>
           <div className="brand-name" style={{ fontSize: 19 }}>
             TapIn

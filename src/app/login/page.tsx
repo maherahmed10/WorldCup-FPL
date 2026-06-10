@@ -22,7 +22,7 @@ export default async function LoginPage() {
         <div className="auth-hero-content">
           <div className="brand" style={{ padding: 0, marginBottom: 34 }}>
             <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
-              <Image src="/logo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+              <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
             </div>
             <div className="brand-name">TapIn</div>
           </div>

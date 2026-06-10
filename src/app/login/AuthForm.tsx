@@ -57,7 +57,7 @@ export function AuthForm() {
     <div className="auth-card">
       <div className="brand auth-card-brand">
         <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
-          <Image src="/logo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+          <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
         </div>
         <div className="brand-name">TapIn</div>
       </div>
