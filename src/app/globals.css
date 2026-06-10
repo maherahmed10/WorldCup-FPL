@@ -168,4 +168,54 @@ input { font-family: inherit; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(14px); } to { transform: translateY(0); } }
 @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ---- Driver.js tour — GAFFER dark theme overrides ---- */
+.driver-popover {
+  background-color: #1E2A3D !important;
+  color: #EEF2F8 !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.60), 0 0 0 1px rgba(255,255,255,0.06) !important;
+  min-width: 280px !important;
+  max-width: 340px !important;
+  padding: 20px 20px 16px !important;
+}
+.driver-popover * { font-family: "Hanken Grotesk", system-ui, sans-serif !important; }
+.driver-popover-title {
+  font-size: 15px !important; font-weight: 800 !important;
+  letter-spacing: -0.02em; color: #EEF2F8 !important;
+}
+.driver-popover-description {
+  font-size: 13px !important; color: #97A4B6 !important;
+  line-height: 1.55 !important; margin-top: 6px !important;
+}
+.driver-popover-close-btn { color: #5E6B7E !important; font-size: 17px !important; }
+.driver-popover-close-btn:hover,
+.driver-popover-close-btn:focus { color: #EEF2F8 !important; }
+.driver-popover-progress-text {
+  font-size: 11px !important; color: #5E6B7E !important;
+  font-weight: 600 !important; letter-spacing: 0.04em;
+}
+.driver-popover-footer button {
+  background: #19212F !important; color: #97A4B6 !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: 8px !important; padding: 7px 14px !important;
+  font-size: 12px !important; font-weight: 700 !important;
+  text-shadow: none !important;
+}
+.driver-popover-footer button:hover,
+.driver-popover-footer button:focus { background: #222C3D !important; color: #EEF2F8 !important; }
+.driver-popover-next-btn {
+  background: #18E08A !important; color: #042417 !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 14px rgba(24,224,138,0.28) !important;
+}
+.driver-popover-next-btn:hover,
+.driver-popover-next-btn:focus { background: #0FC676 !important; color: #042417 !important; }
+/* Arrow: transparent sides, dark fill side */
+.driver-popover-arrow { border-color: #1E2A3D !important; }
+.driver-popover-arrow-side-left  { border-right-color:  transparent !important; border-bottom-color: transparent !important; border-top-color:    transparent !important; }
+.driver-popover-arrow-side-right { border-left-color:   transparent !important; border-bottom-color: transparent !important; border-top-color:    transparent !important; }
+.driver-popover-arrow-side-top   { border-right-color:  transparent !important; border-bottom-color: transparent !important; border-left-color:   transparent !important; }
+.driver-popover-arrow-side-bottom{ border-left-color:   transparent !important; border-top-color:    transparent !important; border-right-color:  transparent !important; }
 .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: livePulse 1.2s ease-in-out infinite; }

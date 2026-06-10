@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
-import { WelcomeModal } from "@/components/WelcomeModal";
+import { OnboardingTour } from "@/components/OnboardingTour";
 import { db } from "@/lib/db";
 import { getCurrentGameweek, getViewSquad } from "@/lib/squad-data";
 import { totalPrice } from "@/lib/squad-rules";
@@ -72,8 +72,8 @@ export default async function AppLayout({
       >
         {children}
       </AppShell>
-      {/* First-login onboarding — shows once per account (User.onboardedAt). */}
-      <WelcomeModal firstLogin={!appUser.onboardedAt} />
+      {/* First-login tour — spotlights real UI elements, runs once per account (User.onboardedAt). */}
+      <OnboardingTour firstLogin={!appUser.onboardedAt} />
     </>
   );
 }

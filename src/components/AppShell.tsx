@@ -25,9 +25,9 @@ const NAV = [
   { id: "players", label: "Players", icon: "players", href: "/players", mobileHidden: false },
   { id: "predict", label: "Bets", icon: "predictions", href: "/predict", mobileHidden: false },
   { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues", mobileHidden: false },
-  { id: "nations", label: "Nations", icon: "leagues", href: "/nations", mobileHidden: false },
+  { id: "nations", label: "Nations", icon: "flag", href: "/nations", mobileHidden: false },
   { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures", mobileHidden: true },
-  { id: "leaderboard", label: "Rankings", icon: "trophy", href: "/leaderboard", mobileHidden: true },
+  { id: "leaderboard", label: "Rankings", icon: "star", href: "/leaderboard", mobileHidden: true },
 ];
 
 // Routes under the "team" tab group (dashboard, squad picker, transfers, store).
@@ -84,6 +84,7 @@ export function AppShell({
             return (
               <Link
                 key={n.id}
+                id={`tour-nav-${n.id}`}
                 href={n.href}
                 className={"nav-item" + (tab === n.id ? " on" : "")}
               >
@@ -100,7 +101,7 @@ export function AppShell({
         </nav>
 
         {/* Budget remaining */}
-        <div style={{ padding: "10px 16px 0" }}>
+        <div id="tour-budget" style={{ padding: "10px 16px 0" }}>
           <div style={{
             borderRadius: 12,
             border: "1px solid var(--line)",
@@ -127,6 +128,12 @@ export function AppShell({
             </span>
             Transfers
           </Link>
+          <Link href="/settings" className={"nav-item" + (pathname.startsWith("/settings") ? " on" : "")}>
+            <span className="nav-ico">
+              <Icon name="settings" size={20} />
+            </span>
+            Settings
+          </Link>
           <div className="side-user" style={{ marginTop: 10 }} onClick={logout}>
             <div className="avatar">{initial}</div>
             <div style={{ flex: 1 }}>
@@ -149,11 +156,14 @@ export function AppShell({
           </div>
         </Link>
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 5,
-            borderRadius: 20, border: "1px solid var(--line)",
-            background: "var(--surface-2)", padding: "4px 10px",
-          }}>
+          <div
+            id="tour-budget-mobile"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              borderRadius: 20, border: "1px solid var(--line)",
+              background: "var(--surface-2)", padding: "4px 10px",
+            }}
+          >
             <Icon name="coins" size={13} style={{ color: budgetTone }} />
             <span style={{ fontSize: 12, fontWeight: 800, color: budgetTone, fontVariantNumeric: "tabular-nums" }}>
               {budgetLabel}
@@ -162,7 +172,8 @@ export function AppShell({
           <div
             className="avatar"
             style={{ width: 32, height: 32, fontSize: 14, cursor: "pointer" }}
-            onClick={logout}
+            onClick={() => router.push("/settings")}
+            title="Settings"
           >
             {initial}
           </div>
@@ -179,6 +190,7 @@ export function AppShell({
           return (
             <Link
               key={n.id}
+              id={`tour-tab-${n.id}`}
               href={n.href}
               className={"tab" + (tab === n.id ? " on" : "")}
             >
