@@ -40,10 +40,12 @@ export function AppShell({
   children,
   user,
   budgetRemaining = 1000,
+  budgetTotal = 1000,
 }: {
   children: React.ReactNode;
   user?: { name: string; handle?: string } | null;
   budgetRemaining?: number; // tenths of a million; 1000 = £100m
+  budgetTotal?: number; // tenths of a million — the cap (= £100m in the group stage, the full pool in the knockouts)
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -51,7 +53,7 @@ export function AppShell({
   const initial = (user?.name ?? "G").charAt(0).toUpperCase();
 
   const budgetLabel = `£${(budgetRemaining / 10).toFixed(1)}m`;
-  const budgetPct = Math.max(0, Math.min(100, (budgetRemaining / 1000) * 100));
+  const budgetPct = Math.max(0, Math.min(100, budgetTotal > 0 ? (budgetRemaining / budgetTotal) * 100 : 0));
   const budgetTone =
     budgetRemaining <= 0 ? "var(--live)" :
     budgetRemaining < 100 ? "var(--gold)" :
@@ -103,11 +105,12 @@ export function AppShell({
             <div style={{ height: 4, borderRadius: 9999, background: "var(--line)", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${budgetPct}%`, background: budgetTone, borderRadius: 9999, transition: "width 0.3s" }} />
             </div>
-            <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>of £100.0m total</div>
+            <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>of £{(budgetTotal / 10).toFixed(1)}m total</div>
           </div>
         </div>
         <div className="side-foot">
-          <Link href="/transfers" className={"nav-item" + (pathname.startsWith("/transfers") ? " on" : "")}>
+          {/* Transfers happen in the squad editor now (knockout rounds). */}
+          <Link href="/squad" className={"nav-item" + (pathname.startsWith("/squad") ? " on" : "")}>
             <span className="nav-ico">
               <Icon name="swap" size={20} />
             </span>

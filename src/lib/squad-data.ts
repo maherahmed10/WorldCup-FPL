@@ -1,7 +1,7 @@
 // Server-side helpers to load a user's active squad + the current gameweek,
 // and shape them for the Pitch component. Reads only our DB (never the API).
 import { db } from "@/lib/db";
-import type { Position, SquadPlayer } from "@/lib/squad-rules";
+import { TRANSFERS_PER_WINDOW, type Position, type SquadPlayer } from "@/lib/squad-rules";
 import type { PitchPlayer, Slot } from "@/components/Pitch";
 
 /**
@@ -9,9 +9,29 @@ import type { PitchPlayer, Slot } from "@/components/Pitch";
  * LOCKED — i.e. the gameweek's deadline has passed. Before then (initial squad
  * selection, or an open knockout transfer window) teams stay hidden so nobody
  * can copy a rival mid-window.
+ *
+ * @deprecated For the rival gate use {@link getLastLockedGameweek} — once ANY
+ * round has locked, that round's squads are safe to show (they're played and
+ * can't be copied). Keying off the *upcoming* round's deadline wrongly hides
+ * rivals during an open knockout window even though a prior round is locked.
  */
 export function teamsViewable(gameweek: { deadline: Date } | null | undefined): boolean {
   return !!gameweek && gameweek.deadline.getTime() <= Date.now();
+}
+
+/**
+ * The most recent gameweek whose DEADLINE has already passed — i.e. the latest
+ * round that is LOCKED and safe to reveal to rivals. Returns null before any
+ * deadline passes (initial selection: nobody's team is viewable yet). During an
+ * open knockout window this is the PRIOR round, so a rival's open-window edit
+ * never leaks — you see their last locked team.
+ */
+export async function getLastLockedGameweek() {
+  const now = new Date();
+  return db.gameweek.findFirst({
+    where: { deadline: { lte: now } },
+    orderBy: { deadline: "desc" },
+  });
 }
 
 /**
@@ -143,6 +163,49 @@ export async function getPickForEdit(
     where: { userId_gameweekId: { userId, gameweekId: sourceGameweekId } },
     select: { captainId: true, viceId: true },
   });
+}
+
+/**
+ * Transfer allowance for a knockout round, WITH carry-over. Each knockout round
+ * you reach grants {@link TRANSFERS_PER_WINDOW} (default 3) transfers; any you
+ * don't use roll forward to the next round. So the effective limit for a round =
+ *   3 × (knockout rounds reached, incl. this one)  − transfers spent in PRIOR rounds
+ *   + unused Extra Transfer perks.
+ * `used` is THIS round's spend (so `limit − used` is what's still available now).
+ */
+export async function getKnockoutTransferAllowance(
+  userId: string,
+  targetGameweek: { id: string; startsAt: Date },
+): Promise<{ limit: number; used: number }> {
+  // Knockout rounds the user has reached = knockout GWs that have started on or
+  // before the target round's start. Each grants TRANSFERS_PER_WINDOW.
+  const reached = await db.gameweek.findMany({
+    where: { isKnockout: true, startsAt: { lte: targetGameweek.startsAt } },
+    select: { id: true },
+  });
+  const granted = reached.length * TRANSFERS_PER_WINDOW;
+
+  // Transfers already spent — split into prior rounds (consume the granted pool)
+  // vs this round (what's left = pool − this round's used).
+  const reachedIds = reached.map((g) => g.id);
+  const spentRows = await db.squad.findMany({
+    where: { userId, gameweekId: { in: reachedIds } },
+    select: { gameweekId: true, transfersUsed: true },
+  });
+  let spentPrior = 0;
+  let usedThisRound = 0;
+  for (const row of spentRows) {
+    if (row.gameweekId === targetGameweek.id) usedThisRound = row.transfersUsed;
+    else spentPrior += row.transfersUsed;
+  }
+
+  // Unused Extra Transfer perks add on top of the carried-over base allowance.
+  const extraPerks = await db.userPerk.count({
+    where: { userId, storeItemId: "perk_extra_transfer", usedAt: null },
+  });
+
+  const limit = Math.max(0, granted - spentPrior + extraPerks);
+  return { limit, used: usedThisRound };
 }
 
 /** Group starters into Pitch rows (GK→DEF→MID→FWD) for the view. */

@@ -10,10 +10,9 @@ import { Icon } from "@/components/Icon";
 import { StatCard } from "@/components/StatCard";
 import { Pitch } from "@/components/Pitch";
 import {
-  getCurrentGameweek,
   getViewSquad,
   toPitchRows,
-  teamsViewable,
+  getLastLockedGameweek,
 } from "@/lib/squad-data";
 import {
   getGameweekPlayerPoints,
@@ -52,10 +51,13 @@ export default async function ManagerPage({
   // Your own team → the editable dashboard.
   if (targetId === user.id) redirect("/team");
 
-  const gameweek = await getCurrentGameweek();
+  // The latest LOCKED round (deadline passed). This is the round whose squads are
+  // safe to reveal — during an open knockout window it's the PRIOR round, so a
+  // rival's open-window edit is never exposed. null before any deadline passes.
+  const gameweek = await getLastLockedGameweek();
 
   // ---- locked gate ----
-  if (!teamsViewable(gameweek)) {
+  if (!gameweek) {
     return (
       <Shell>
         <div className="empty">
@@ -64,9 +66,8 @@ export default async function ManagerPage({
           </div>
           <h3>Teams are locked</h3>
           <p>
-            Rival squads unlock once the transfer window closes (the{" "}
-            {gameweek?.label ?? "current"} deadline). Check back after kickoff so
-            nobody can copy your team mid-window.
+            Rival squads unlock once the first deadline passes. Check back after
+            kickoff so nobody can copy a team mid-window.
           </p>
           <Link className="btn btn-ghost" href="/leagues">
             Back to Leagues
@@ -90,9 +91,10 @@ export default async function ManagerPage({
   if (!target) notFound();
 
   const teamName = target.teamName ?? target.name;
-  // Carry-forward: show the rival's most recent locked squad (they may not have
-  // re-saved for the current gameweek). Never reveals a future edit.
-  const view = gameweek ? await getViewSquad(targetId, gameweek.startsAt) : null;
+  // Carry-forward: show the rival's squad as of the last LOCKED round (they may
+  // not have re-saved for it). Keyed to that round's start, so an open-window
+  // edit for a later round is never revealed.
+  const view = await getViewSquad(targetId, gameweek.startsAt);
   const squad = view?.squad ?? null;
 
   // ---- no squad picked ----
@@ -119,16 +121,19 @@ export default async function ManagerPage({
   const rows = toPitchRows(squad.players);
   const bench = squad.players.filter((p) => !p.isStarting);
 
+  // Captain/vice for the round the displayed squad came from (carries forward
+  // with the squad), falling back to the squad's own captain.
   const pick = await db.gameweekPick.findUnique({
-    where: { userId_gameweekId: { userId: targetId, gameweekId: gameweek!.id } },
+    where: { userId_gameweekId: { userId: targetId, gameweekId: view!.gameweekId } },
     select: { captainId: true, viceId: true },
   });
   const captainId = pick?.captainId ?? squad.captainId;
   const viceId = pick?.viceId ?? null;
 
+  // Points are for the locked round being shown.
   const ids = squad.players.map((p) => p.id);
-  const gwPoints = await getGameweekPlayerPoints(ids, gameweek!.id);
-  const gwMinutes = await getGameweekMinutes(ids, gameweek!.id);
+  const gwPoints = await getGameweekPlayerPoints(ids, gameweek.id);
+  const gwMinutes = await getGameweekMinutes(ids, gameweek.id);
   const gwTotal = squadGameweekTotal(squad.players, captainId, gwPoints, viceId, gwMinutes);
   const seasonTotal = await getUserSeasonTotal(targetId);
 

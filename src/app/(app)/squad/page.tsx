@@ -3,10 +3,16 @@
 // to the interactive client picker.
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { getUpcomingDeadlineGameweek, getSquadForEdit, getPickForEdit } from "@/lib/squad-data";
+import {
+  getUpcomingDeadlineGameweek,
+  getSquadForEdit,
+  getPickForEdit,
+  getKnockoutTransferAllowance,
+} from "@/lib/squad-data";
 import { getMaxPerCountry, type PerkLike } from "@/lib/store";
+import { BUDGET, totalPrice } from "@/lib/squad-rules";
+import { ensureKnockoutBudgetMerged, knockoutFunds } from "@/lib/budget-merge";
 import { SquadPicker, type PickerPlayer } from "./SquadPicker";
-import { BankConvertCard } from "./BankConvertCard";
 
 export default async function SquadPage() {
   const supabase = await createClient();
@@ -44,6 +50,13 @@ export default async function SquadPage() {
   const isGroupStage = !(gameweek?.isKnockout ?? false);
   const initialFavouriteIds = favouriteRows.map((f) => f.playerId);
 
+  // Knockouts: lazily fold any leftover group budget into the bank (one pool).
+  if (!isGroupStage) await ensureKnockoutBudgetMerged(user.id);
+  const bettingBalance = !isGroupStage
+    ? (await db.user.findUnique({ where: { id: user.id }, select: { bettingBalance: true } }))?.bettingBalance ??
+      appUser?.bettingBalance ?? 0
+    : appUser?.bettingBalance ?? 0;
+
   // Seed the picker from the upcoming-GW squad if it exists, else carry forward
   // the most recent squad. The 15 are LOCKED whenever a prior squad exists (only
   // the first-ever pick is unlocked); the 15 change only via /transfers.
@@ -51,17 +64,34 @@ export default async function SquadPage() {
     ? await getSquadForEdit(user.id, gameweek.id)
     : { squad: null, sourceGameweekId: null };
   const lockRoster = existing !== null;
-  const budgetBonus = appUser?.squadBudgetBonus ?? 0;
   const pick = await getPickForEdit(user.id, sourceGameweekId);
+
+  // One-pool budget: in the knockouts the squad cap = current squad spend + the
+  // whole bank, so budgetBonus is derived (cap − £100M) rather than a stored
+  // conversion. In the group stage it's the flat £100M (legacy bonus honoured).
+  const squadSpentTenths = existing ? totalPrice(existing.players) : 0;
+  const funds = knockoutFunds({
+    isKnockout: !isGroupStage,
+    bettingBalance,
+    squadSpentTenths,
+    squadBudgetBonus: appUser?.squadBudgetBonus ?? 0,
+  });
+  const budgetBonus = funds.squadCapTenths - BUDGET;
+
+  // Knockouts: transfers happen right here in the editor. Each round grants
+  // 3 transfers; UNUSED ones carry over to the next knockout round (+ unused
+  // Extra Transfer perks). See getKnockoutTransferAllowance.
+  const transferMode = !isGroupStage && lockRoster;
+  let transfersUsed = 0;
+  let transferLimit = 0;
+  if (transferMode && gameweek) {
+    const allowance = await getKnockoutTransferAllowance(user.id, gameweek);
+    transfersUsed = allowance.used;
+    transferLimit = allowance.limit;
+  }
 
   return (
     <>
-      {!isGroupStage && appUser && (
-        <BankConvertCard
-          bettingBalance={appUser.bettingBalance}
-          currentBonus={budgetBonus}
-        />
-      )}
       <SquadPicker
         pool={pool}
         gameweekLabel={gameweek?.label ?? ""}
@@ -70,11 +100,14 @@ export default async function SquadPage() {
         initialCaptainId={pick?.captainId ?? existing?.captainId ?? null}
         initialViceId={pick?.viceId ?? null}
         maxPerCountry={maxPerCountry}
-        balance={appUser?.bettingBalance ?? 1000}
+        balance={bettingBalance}
         budgetBonus={budgetBonus}
         ownedPerks={perks}
         isGroupStage={isGroupStage}
         lockRoster={lockRoster}
+        transferMode={transferMode}
+        transfersUsed={transfersUsed}
+        transferLimit={transferLimit}
         initialFavouriteIds={initialFavouriteIds}
       />
     </>
