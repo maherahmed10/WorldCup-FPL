@@ -47,10 +47,6 @@ export default function HomePage() {
             <span className="n">104</span>
             <span className="l">Matches</span>
           </div>
-          <div className="hh-stat">
-            <span className="n">2.4M</span>
-            <span className="l">Managers</span>
-          </div>
         </div>
       </section>
 
