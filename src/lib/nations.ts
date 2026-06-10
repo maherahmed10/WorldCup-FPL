@@ -239,6 +239,127 @@ export async function getNationStats(
   };
 }
 
+// ── Country team data (schedule + lineup + players) ───────────────────────
+
+export interface CountryFixtureRow {
+  id: string;
+  kickoff: Date;
+  status: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  isHome: boolean;
+  venue: string | null;
+}
+
+export interface CountryLineupEntry {
+  playerApiId: number;
+  playerName: string;
+  pos: string | null;
+  playerNumber: number | null;
+  grid: string | null;
+}
+
+export interface CountryPlayerRow {
+  id: string;
+  name: string;
+  position: string;
+  price: number;
+  photoUrl: string | null;
+  seasonGoals: number;
+  seasonAssists: number;
+  seasonRating: number | null;
+}
+
+export interface CountryTeamData {
+  teamName: string;
+  group: string | null;
+  eliminated: boolean;
+  fixtures: CountryFixtureRow[];
+  lastLineup: {
+    formation: string | null;
+    starters: CountryLineupEntry[];
+    bench: CountryLineupEntry[];
+  } | null;
+  players: CountryPlayerRow[];
+}
+
+export async function getCountryTeamData(country: string): Promise<CountryTeamData | null> {
+  const team = await db.team.findFirst({
+    where: { country },
+    include: {
+      homeGames: {
+        include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } } },
+        orderBy: { kickoff: "asc" },
+      },
+      awayGames: {
+        include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } } },
+        orderBy: { kickoff: "asc" },
+      },
+      players: { orderBy: { price: "desc" }, take: 20 },
+    },
+  });
+  if (!team) return null;
+
+  // Merge + sort all fixtures chronologically
+  const fixtures: CountryFixtureRow[] = [
+    ...team.homeGames.map((f) => ({
+      id: f.id, kickoff: f.kickoff, status: f.status as string,
+      homeTeamName: f.homeTeam.name, awayTeamName: f.awayTeam.name,
+      homeScore: f.homeScore, awayScore: f.awayScore, isHome: true, venue: f.venue,
+    })),
+    ...team.awayGames.map((f) => ({
+      id: f.id, kickoff: f.kickoff, status: f.status as string,
+      homeTeamName: f.homeTeam.name, awayTeamName: f.awayTeam.name,
+      homeScore: f.homeScore, awayScore: f.awayScore, isHome: false, venue: f.venue,
+    })),
+  ].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+
+  // Most recent finished fixture with lineup data
+  const lastFixtureWithLineup = await db.fixture.findFirst({
+    where: {
+      status: "FINISHED",
+      OR: [{ homeTeamId: team.id }, { awayTeamId: team.id }],
+      matchLineups: { some: { teamId: team.id } },
+    },
+    orderBy: { kickoff: "desc" },
+    select: { id: true },
+  });
+
+  let lastLineup: CountryTeamData["lastLineup"] = null;
+  if (lastFixtureWithLineup) {
+    const rows = await db.matchLineup.findMany({
+      where: { fixtureId: lastFixtureWithLineup.id, teamId: team.id },
+      orderBy: [{ isSubstitute: "asc" }, { grid: "asc" }, { playerNumber: "asc" }],
+    });
+    const formation = rows[0]?.formation ?? null;
+    lastLineup = {
+      formation,
+      starters: rows
+        .filter((r) => !r.isSubstitute)
+        .map((r) => ({ playerApiId: r.playerApiId, playerName: r.playerName, pos: r.pos, playerNumber: r.playerNumber, grid: r.grid })),
+      bench: rows
+        .filter((r) => r.isSubstitute)
+        .map((r) => ({ playerApiId: r.playerApiId, playerName: r.playerName, pos: r.pos, playerNumber: r.playerNumber, grid: null })),
+    };
+  }
+
+  return {
+    teamName: team.name,
+    group: team.group,
+    eliminated: team.eliminated,
+    fixtures,
+    lastLineup,
+    players: team.players.map((p) => ({
+      id: p.id, name: p.name, position: p.position as string, price: p.price,
+      photoUrl: p.photoUrl,
+      seasonGoals: p.seasonGoals ?? 0, seasonAssists: p.seasonAssists ?? 0,
+      seasonRating: p.seasonRating,
+    })),
+  };
+}
+
 export async function getNationMembersData(
   country: string,
   userId: string,
