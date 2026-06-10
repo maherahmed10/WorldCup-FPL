@@ -281,28 +281,51 @@ export function SquadPicker({
     }
   }
 
-  function loadTemplate() {
-    const ids = buildTemplateSquad(pool);
-    if (ids.length === 0) {
-      setMessage("Couldn't build a suggested squad — try picking manually.");
+  function applyBestLineup(players: PickerPlayer[]) {
+    const candidates = Object.keys(FORMATIONS);
+    let best: { formation: string; split: ReturnType<typeof splitStartingXI>; starterValue: number } | null = null;
+
+    for (const formation of candidates) {
+      const split = splitStartingXI(players, formation);
+      if (!split) continue;
+      const starterValue = split.starters.reduce((s, p) => s + p.price, 0);
+      if (!best || starterValue > best.starterValue) best = { formation, split, starterValue };
+    }
+
+    if (!best?.split) {
+      setMessage("Couldn't arrange your players into a valid formation.");
       return;
     }
-    const players = ids.map((id) => byId.get(id)).filter(Boolean) as PickerPlayer[];
-    const split = splitStartingXI(players, "4-3-3");
-    if (!split) return;
+
+    const { formation, split } = best;
     const newSquad: SquadEntry[] = [
       ...split.starters.map((p) => ({ ...p, isStarting: true })),
       ...split.bench.map((p) => ({ ...p, isStarting: false })),
     ];
-    // Auto-set captain/vice to the two most expensive attacking starters
     const attackers = split.starters
       .filter((p) => p.position === "FWD" || p.position === "MID")
       .sort((a, b) => b.price - a.price);
     setSquad(newSquad);
     setCaptainId(attackers[0]?.id ?? null);
     setViceId(attackers[1]?.id ?? null);
-    setSelectedFormation("4-3-3");
+    setSelectedFormation(formation);
     setMessage(null);
+  }
+
+  function loadTemplate() {
+    if (lockRoster) {
+      // Roster is locked — rearrange the current 15 into the best lineup + captain
+      const current = squad.map((s) => byId.get(s.id)).filter(Boolean) as PickerPlayer[];
+      applyBestLineup(current);
+      return;
+    }
+    const ids = buildTemplateSquad(pool);
+    if (ids.length === 0) {
+      setMessage("Couldn't build a suggested squad — try picking manually.");
+      return;
+    }
+    const players = ids.map((id) => byId.get(id)).filter(Boolean) as PickerPlayer[];
+    applyBestLineup(players);
   }
 
   async function handleSave() {
@@ -387,22 +410,30 @@ export function SquadPicker({
 
       <BudgetBar spent={validation.spent} count={validation.total} bonusBudget={budgetBonus} />
 
-      {!lockRoster && squad.length === 0 && (
-        <div className="banner open" style={{ marginTop: 12 }}>
-          <div className="banner-l">
-            <div className="banner-ico">
-              <Icon name="bolt" size={20} style={{ color: "var(--accent)" }} />
-            </div>
-            <div>
-              <h4>Not sure where to start?</h4>
-              <p>Load a suggested squad — balanced, within budget, fully customisable.</p>
-            </div>
+      <div className="banner open" style={{ marginTop: 12 }}>
+        <div className="banner-l">
+          <div className="banner-ico">
+            <Icon name="bolt" size={20} style={{ color: "var(--accent)" }} />
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={loadTemplate}>
-            Suggest a squad
-          </button>
+          <div>
+            <h4>
+              {lockRoster
+                ? "Optimise your lineup"
+                : squad.length === 0
+                ? "Not sure where to start?"
+                : "Want a fresh suggestion?"}
+            </h4>
+            <p>
+              {lockRoster
+                ? "Auto-arrange your 15 into the best formation and pick your captain."
+                : "Load a suggested squad — balanced, within budget, fully customisable."}
+            </p>
+          </div>
         </div>
-      )}
+        <button className="btn btn-ghost btn-sm" onClick={loadTemplate}>
+          {lockRoster ? "Optimise" : "Suggest a squad"}
+        </button>
+      </div>
 
       {showDraftBanner && (
         <div className="valid-msgs" style={{ marginTop: 12 }}>
