@@ -6,7 +6,7 @@
 import "driver.js/dist/driver.css";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { setOnboarded } from "@/app/(app)/home/actions";
 
 const ONBOARD_KEY = "gaffer_onboarded";
@@ -14,26 +14,34 @@ export const REPLAY_TOUR_KEY = "gaffer_replay_tour";
 
 export function OnboardingTour({ firstLogin }: { firstLogin: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const started = useRef(false);
 
   useEffect(() => {
+    // Check replay flag before the started guard — reset it so the tour can re-run
+    let replay = false;
+    try {
+      replay = localStorage.getItem(REPLAY_TOUR_KEY) === "1";
+      if (replay) {
+        localStorage.removeItem(REPLAY_TOUR_KEY);
+        started.current = false;
+      }
+    } catch {}
+
     if (started.current) return;
 
     let seen = false;
-    let replay = false;
     try {
       seen = localStorage.getItem(ONBOARD_KEY) === "1";
-      replay = localStorage.getItem(REPLAY_TOUR_KEY) === "1";
-      if (replay) localStorage.removeItem(REPLAY_TOUR_KEY);
     } catch {}
 
     if (!replay && (!firstLogin || seen)) return;
 
     started.current = true;
-    // Let the page fully paint before the spotlight appears
     const t = setTimeout(() => launchTour({ push: (p) => router.push(p) }), 700);
     return () => clearTimeout(t);
-  }, [firstLogin, router]);
+  // pathname in deps so each navigation re-checks the replay flag
+  }, [firstLogin, router, pathname]);
 
   return null;
 }
