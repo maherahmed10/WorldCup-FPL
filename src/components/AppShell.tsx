@@ -20,12 +20,14 @@ function GafferLogo({ size = 20 }: { size?: number }) {
 }
 
 const NAV = [
-  { id: "home", label: "Home", icon: "home", href: "/home" },
-  { id: "team", label: "My Team", icon: "team", href: "/team" },
-  { id: "players", label: "Players", icon: "players", href: "/players" },
-  { id: "predict", label: "Bets", icon: "predictions", href: "/predict" },
-  { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues" },
-  { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures" },
+  { id: "home", label: "Home", icon: "home", href: "/home", mobileHidden: false },
+  { id: "team", label: "My Team", icon: "team", href: "/team", mobileHidden: false },
+  { id: "players", label: "Players", icon: "players", href: "/players", mobileHidden: false },
+  { id: "predict", label: "Bets", icon: "predictions", href: "/predict", mobileHidden: false },
+  { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues", mobileHidden: false },
+  { id: "nations", label: "Nations", icon: "leagues", href: "/nations", mobileHidden: false },
+  { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures", mobileHidden: true },
+  { id: "leaderboard", label: "Rankings", icon: "trophy", href: "/leaderboard", mobileHidden: true },
 ];
 
 // Routes under the "team" tab group (dashboard, squad picker, transfers, store).
@@ -169,7 +171,7 @@ export function AppShell({
 
       {/* ---- mobile bottom tab bar ---- */}
       <nav className="tabbar">
-        {NAV.map((n) => {
+        {NAV.filter((n) => !n.mobileHidden).map((n) => {
           const badge = n.id === "predict" && pendingH2HCount > 0 ? pendingH2HCount : 0;
           return (
             <Link

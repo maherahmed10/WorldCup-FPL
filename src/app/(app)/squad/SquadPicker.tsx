@@ -32,6 +32,7 @@ import {
   type SquadPlayer,
 } from "@/lib/squad-rules";
 import { countryCode } from "@/lib/countries";
+import { buildTemplateSquad } from "@/lib/template-squad";
 import { saveSquad } from "./actions";
 import { toggleFavourite } from "../players/actions";
 
@@ -280,6 +281,30 @@ export function SquadPicker({
     }
   }
 
+  function loadTemplate() {
+    const ids = buildTemplateSquad(pool);
+    if (ids.length === 0) {
+      setMessage("Couldn't build a suggested squad — try picking manually.");
+      return;
+    }
+    const players = ids.map((id) => byId.get(id)).filter(Boolean) as PickerPlayer[];
+    const split = splitStartingXI(players, "4-3-3");
+    if (!split) return;
+    const newSquad: SquadEntry[] = [
+      ...split.starters.map((p) => ({ ...p, isStarting: true })),
+      ...split.bench.map((p) => ({ ...p, isStarting: false })),
+    ];
+    // Auto-set captain/vice to the two most expensive attacking starters
+    const attackers = split.starters
+      .filter((p) => p.position === "FWD" || p.position === "MID")
+      .sort((a, b) => b.price - a.price);
+    setSquad(newSquad);
+    setCaptainId(attackers[0]?.id ?? null);
+    setViceId(attackers[1]?.id ?? null);
+    setSelectedFormation("4-3-3");
+    setMessage(null);
+  }
+
   async function handleSave() {
     setMessage(null);
     if (!formationOk) {
@@ -361,6 +386,23 @@ export function SquadPicker({
       </div>
 
       <BudgetBar spent={validation.spent} count={validation.total} bonusBudget={budgetBonus} />
+
+      {!lockRoster && squad.length === 0 && (
+        <div className="banner open" style={{ marginTop: 12 }}>
+          <div className="banner-l">
+            <div className="banner-ico">
+              <Icon name="bolt" size={20} style={{ color: "var(--accent)" }} />
+            </div>
+            <div>
+              <h4>Not sure where to start?</h4>
+              <p>Load a suggested squad — balanced, within budget, fully customisable.</p>
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={loadTemplate}>
+            Suggest a squad
+          </button>
+        </div>
+      )}
 
       {showDraftBanner && (
         <div className="valid-msgs" style={{ marginTop: 12 }}>

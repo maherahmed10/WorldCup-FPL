@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/current-user";
 import { getCurrentGameweek } from "@/lib/squad-data";
 import { STORE_ITEMS, canAffordPerk } from "@/lib/store";
+import { fmtMoney } from "@/lib/format";
 
 export type PurchaseResult = { ok: true } | { ok: false; error: string };
 
@@ -25,7 +26,7 @@ export async function purchaseItem(storeItemId: string): Promise<PurchaseResult>
   if (!canAffordPerk(user.bettingBalance, item.cost)) {
     return {
       ok: false,
-      error: `Not enough funds — you need £${item.cost.toLocaleString("en-GB")} but have £${user.bettingBalance.toLocaleString("en-GB")}.`,
+      error: `Not enough funds — you need ${fmtMoney(item.cost)} but have ${fmtMoney(user.bettingBalance)}.`,
     };
   }
 

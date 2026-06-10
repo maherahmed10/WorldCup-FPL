@@ -74,6 +74,7 @@ model User {
   bettingBalance     Int      @default(5000000) // virtual £ bank — deducted on bet/purchase, credited on win/void
   squadBudgetBonus   Int      @default(0)       // tenths of a million converted from betting bank after group stage
   squadBudgetMerged  Boolean  @default(false)   // true once the post-group leftover-squad-budget → bank merge has run
+  supportedNation    String?   // the WC nation the user explicitly picked to represent
   onboardedAt        DateTime? // set when the first-login Welcome guide is dismissed (null = not onboarded yet)
   createdAt          DateTime @default(now())
 

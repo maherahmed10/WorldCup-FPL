@@ -25,9 +25,8 @@ import { totalPrice } from "@/lib/squad-rules";
 import type { PerkLike } from "@/lib/store";
 import { TeamNamePrompt } from "./TeamNamePrompt";
 import { MiniStore } from "@/components/MiniStore";
-import { RankBoard } from "@/components/RankBoard";
-import { getGlobalLeaderboard } from "@/lib/leaderboard";
 import { PlayersInAction, type PlayerInAction } from "@/components/PlayersInAction";
+import { SquadFixtures, type SquadFixtureItem } from "@/components/SquadFixtures";
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -125,10 +124,9 @@ export default async function TeamPage() {
   const isGroupStage = !(gameweek?.isKnockout ?? false);
 
   // Global rank board (added at the top — see leaderboard.ts).
-  const [leaderboard, pendingH2HCount] = await Promise.all([
-    getGlobalLeaderboard({ userId: user.id, gameweekId: gameweek!.id }),
-    db.h2HChallenge.count({ where: { opponentId: user.id, status: "PENDING" } }),
-  ]);
+  const pendingH2HCount = await db.h2HChallenge.count({
+    where: { opponentId: user.id, status: "PENDING" },
+  });
 
   // "Your Players in Action Today" — fixtures within the current UTC day + 6h buffer for
   // late North-American kickoffs that cross midnight UTC.
@@ -166,6 +164,52 @@ export default async function TeamPage() {
     teamToFixture.set(f.awayTeamId, f);
   }
   const playerTeamMap = new Map(playerTeamRows.map((r) => [r.id, r.teamId]));
+  const squadTeamIds = [...new Set(playerTeamRows.map((r) => r.teamId))];
+
+  // Upcoming fixtures for squads teams — strictly after today's window to avoid
+  // overlapping with the "Players in Action Today" section above.
+  const upcomingRaw = await db.fixture.findMany({
+    where: {
+      status: "SCHEDULED",
+      kickoff: { gt: todayWindowEnd },
+      OR: [
+        { homeTeamId: { in: squadTeamIds } },
+        { awayTeamId: { in: squadTeamIds } },
+      ],
+    },
+    orderBy: { kickoff: "asc" },
+    take: 6,
+    select: {
+      id: true,
+      kickoff: true,
+      homeTeamId: true,
+      awayTeamId: true,
+      homeTeam: { select: { country: true } },
+      awayTeam: { select: { country: true } },
+    },
+  });
+
+  const squadFixtures: SquadFixtureItem[] = upcomingRaw.map((f) => ({
+    id: f.id,
+    kickoffIso: f.kickoff.toISOString(),
+    home: f.homeTeam.country,
+    away: f.awayTeam.country,
+    homeTeamId: f.homeTeamId,
+    awayTeamId: f.awayTeamId,
+    players: squad.players
+      .filter((p) => {
+        const tid = playerTeamMap.get(p.id);
+        return tid === f.homeTeamId || tid === f.awayTeamId;
+      })
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        position: p.position,
+        isHomeTeam: playerTeamMap.get(p.id) === f.homeTeamId,
+        isCaptain: p.id === captainId,
+        isVice: p.id === viceId,
+      })),
+  }));
 
   const playersInAction: PlayerInAction[] = squad.players
     .filter((p) => {
@@ -206,10 +250,6 @@ export default async function TeamPage() {
           <Icon name="settings" size={16} />
           {isGroupStage ? "Formation & Captain" : "Edit Squad"}
         </Link>
-      </div>
-
-      <div style={{ marginBottom: 14 }}>
-        <RankBoard data={leaderboard} />
       </div>
 
       {pendingH2HCount > 0 && (
@@ -317,6 +357,8 @@ export default async function TeamPage() {
           />
         </div>
       </div>
+
+      <SquadFixtures fixtures={squadFixtures} />
     </div>
   );
 }
