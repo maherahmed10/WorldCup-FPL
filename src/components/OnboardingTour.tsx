@@ -70,7 +70,7 @@ async function launchTour(nav: { push: (path: string) => void }) {
     steps: [
       {
         popover: {
-          title: "Welcome to GAFFER ⚽",
+          title: "Welcome to TapIn ⚽",
           description:
             "World Cup fantasy meets a virtual betting bank. This quick tour covers all the essentials.",
         },

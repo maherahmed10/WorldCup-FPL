@@ -3,21 +3,11 @@
 // App shell ported from design/app.jsx — desktop sidebar + mobile top bar +
 // mobile bottom tab bar. Wraps every authed route. Active state derives from
 // the current pathname.
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { fmtPrice } from "@/lib/format";
-
-function GafferLogo({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M9.5 4 C9.5 6.5 14.5 6.5 14.5 4 Q17 4 18.5 6.5 L21.5 9 Q22.5 10.5 21 11.5 L18.5 10.5 L18.5 21.5 L5.5 21.5 L5.5 10.5 L3 11.5 Q1.5 10.5 2.5 9 L5.5 6.5 Q7 4 9.5 4 Z"
-        fill="white"
-      />
-    </svg>
-  );
-}
 
 const NAV = [
   { id: "home", label: "Home", icon: "home", href: "/home", mobileHidden: false },
@@ -75,8 +65,10 @@ export function AppShell({
       {/* ---- desktop sidebar ---- */}
       <aside className="sidebar">
         <Link href="/home" className="brand" style={{ textDecoration: "none", color: "inherit" }}>
-          <div className="brand-mark"><GafferLogo size={20} /></div>
-          <div className="brand-name">GAFFER</div>
+          <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
+            <Image src="/logo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
+          </div>
+          <div className="brand-name">TapIn</div>
         </Link>
         <nav className="nav">
           {NAV.map((n) => {
@@ -148,11 +140,11 @@ export function AppShell({
       {/* ---- mobile top bar ---- */}
       <header className="topbar">
         <Link href="/home" className="brand" style={{ padding: 0, textDecoration: "none", color: "inherit" }}>
-          <div className="brand-mark" style={{ width: 30, height: 30, fontSize: 17 }}>
-            <GafferLogo size={17} />
+          <div className="brand-mark" style={{ width: 30, height: 30, background: "transparent", boxShadow: "none" }}>
+            <Image src="/logo.png" alt="TapIn" width={30} height={30} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
           </div>
           <div className="brand-name" style={{ fontSize: 19 }}>
-            GAFFER
+            TapIn
           </div>
         </Link>
         <div className="row" style={{ gap: 8, alignItems: "center" }}>

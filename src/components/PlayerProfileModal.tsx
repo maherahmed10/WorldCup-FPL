@@ -106,7 +106,7 @@ export function PlayerProfileModal({
                   </div>
                   <div className="pp-price">
                     <span className="pp-price-v num">{fmtMoney(data.price * 1_000_000)}</span>
-                    <span className="pp-price-l">GAFFER price</span>
+                    <span className="pp-price-l">TapIn price</span>
                   </div>
                 </div>
               </div>
@@ -198,7 +198,7 @@ function StatsTab({ data }: { data: PlayerProfileView }) {
 
       <div className="pp-section">
         <div className="pp-sec-head">
-          <span>GAFFER fantasy</span>
+          <span>TapIn fantasy</span>
           <span className="pp-sec-note">points from settled matches</span>
         </div>
         <div className="pp-fantasy">
