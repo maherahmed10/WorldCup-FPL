@@ -66,7 +66,7 @@ export async function getUpcomingDeadlineGameweek() {
 export interface LoadedSquad {
   squadId: string;
   captainId: string | null;
-  players: Array<SquadPlayer & { name: string; isStarting: boolean }>;
+  players: Array<SquadPlayer & { name: string; isStarting: boolean; injured: boolean }>;
 }
 
 // Prisma squad row → our LoadedSquad shape.
@@ -75,7 +75,7 @@ type SquadWithPlayers = {
   captainId: string | null;
   players: Array<{
     isStarting: boolean;
-    player: { id: string; name: string; position: string; price: number; team: { country: string } };
+    player: { id: string; name: string; position: string; price: number; injured: boolean; team: { country: string } };
   }>;
 };
 function toLoadedSquad(squad: SquadWithPlayers): LoadedSquad {
@@ -88,6 +88,7 @@ function toLoadedSquad(squad: SquadWithPlayers): LoadedSquad {
       position: sp.player.position as Position,
       price: sp.player.price,
       country: sp.player.team.country,
+      injured: sp.player.injured,
       isStarting: sp.isStarting,
     })),
   };

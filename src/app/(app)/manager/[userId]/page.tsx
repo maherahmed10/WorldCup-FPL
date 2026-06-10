@@ -4,6 +4,7 @@
 // managers you share a league with.
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
+import { fmtPrice } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
 import { Icon } from "@/components/Icon";
@@ -155,7 +156,7 @@ export default async function ManagerPage({
         <StatCard label="Total Points" value={seasonTotal} sub="Season" icon="bolt" />
         <StatCard label="This Round" value={`+${gwTotal}`} sub={gameweek?.label ?? ""} tone="accent" icon="arrowup" />
         <StatCard label="Squad" value={`${squad.players.length}/15`} sub="Players picked" tone="gold" icon="team" />
-        <StatCard label="Squad Value" value={`£${(squadValue / 10).toFixed(1)}m`} sub="At selection" tone="blue" icon="coins" />
+        <StatCard label="Squad Value" value={fmtPrice(squadValue)} sub="At selection" tone="blue" icon="coins" />
       </div>
 
       <div className="two-col" style={{ marginTop: 16 }}>

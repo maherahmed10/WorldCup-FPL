@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { fmtPrice } from "@/lib/format";
 
 function GafferLogo({ size = 20 }: { size?: number }) {
   return (
@@ -19,12 +20,14 @@ function GafferLogo({ size = 20 }: { size?: number }) {
 }
 
 const NAV = [
-  { id: "home", label: "Home", icon: "home", href: "/home" },
-  { id: "team", label: "My Team", icon: "team", href: "/team" },
-  { id: "players", label: "Players", icon: "players", href: "/players" },
-  { id: "predict", label: "Bets", icon: "predictions", href: "/predict" },
-  { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues" },
-  { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures" },
+  { id: "home", label: "Home", icon: "home", href: "/home", mobileHidden: false },
+  { id: "team", label: "My Team", icon: "team", href: "/team", mobileHidden: false },
+  { id: "players", label: "Players", icon: "players", href: "/players", mobileHidden: false },
+  { id: "predict", label: "Bets", icon: "predictions", href: "/predict", mobileHidden: false },
+  { id: "leagues", label: "Leagues", icon: "leagues", href: "/leagues", mobileHidden: false },
+  { id: "nations", label: "Nations", icon: "leagues", href: "/nations", mobileHidden: false },
+  { id: "fixtures", label: "Fixtures", icon: "fixtures", href: "/fixtures", mobileHidden: true },
+  { id: "leaderboard", label: "Rankings", icon: "trophy", href: "/leaderboard", mobileHidden: true },
 ];
 
 // Routes under the "team" tab group (dashboard, squad picker, transfers, store).
@@ -41,18 +44,20 @@ export function AppShell({
   user,
   budgetRemaining = 1000,
   budgetTotal = 1000,
+  pendingH2HCount = 0,
 }: {
   children: React.ReactNode;
   user?: { name: string; handle?: string } | null;
   budgetRemaining?: number; // tenths of a million; 1000 = £100m
   budgetTotal?: number; // tenths of a million — the cap (= £100m in the group stage, the full pool in the knockouts)
+  pendingH2HCount?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const tab = activeTab(pathname);
   const initial = (user?.name ?? "G").charAt(0).toUpperCase();
 
-  const budgetLabel = `£${(budgetRemaining / 10).toFixed(1)}m`;
+  const budgetLabel = fmtPrice(budgetRemaining);
   const budgetPct = Math.max(0, Math.min(100, budgetTotal > 0 ? (budgetRemaining / budgetTotal) * 100 : 0));
   const budgetTone =
     budgetRemaining <= 0 ? "var(--live)" :
@@ -74,18 +79,24 @@ export function AppShell({
           <div className="brand-name">GAFFER</div>
         </Link>
         <nav className="nav">
-          {NAV.map((n) => (
-            <Link
-              key={n.id}
-              href={n.href}
-              className={"nav-item" + (tab === n.id ? " on" : "")}
-            >
-              <span className="nav-ico">
-                <Icon name={n.icon} size={20} />
-              </span>
-              <span>{n.label}</span>
-            </Link>
-          ))}
+          {NAV.map((n) => {
+            const badge = n.id === "predict" && pendingH2HCount > 0 ? pendingH2HCount : 0;
+            return (
+              <Link
+                key={n.id}
+                href={n.href}
+                className={"nav-item" + (tab === n.id ? " on" : "")}
+              >
+                <span className="nav-ico" style={{ position: "relative" }}>
+                  <Icon name={n.icon} size={20} />
+                  {badge > 0 && (
+                    <span className="nav-badge">{badge > 9 ? "9+" : badge}</span>
+                  )}
+                </span>
+                <span>{n.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Budget remaining */}
@@ -163,18 +174,24 @@ export function AppShell({
 
       {/* ---- mobile bottom tab bar ---- */}
       <nav className="tabbar">
-        {NAV.map((n) => (
-          <Link
-            key={n.id}
-            href={n.href}
-            className={"tab" + (tab === n.id ? " on" : "")}
-          >
-            <span className="tab-ico">
-              <Icon name={n.icon} size={23} />
-            </span>
-            <span>{n.label}</span>
-          </Link>
-        ))}
+        {NAV.filter((n) => !n.mobileHidden).map((n) => {
+          const badge = n.id === "predict" && pendingH2HCount > 0 ? pendingH2HCount : 0;
+          return (
+            <Link
+              key={n.id}
+              href={n.href}
+              className={"tab" + (tab === n.id ? " on" : "")}
+            >
+              <span className="tab-ico" style={{ position: "relative" }}>
+                <Icon name={n.icon} size={23} />
+                {badge > 0 && (
+                  <span className="nav-badge">{badge > 9 ? "9+" : badge}</span>
+                )}
+              </span>
+              <span>{n.label}</span>
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );

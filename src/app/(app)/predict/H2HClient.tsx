@@ -6,6 +6,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { respondToH2HChallenge, cancelH2HChallenge } from "./h2h-actions";
+import { fmtMoney } from "@/lib/format";
 
 export interface H2HChallengeView {
   id: string;
@@ -24,9 +25,6 @@ export interface H2HChallengeView {
   fixture: { home: string; away: string };
 }
 
-function fmt(n: number) {
-  return `£${n.toLocaleString("en-GB")}`;
-}
 
 function statusTone(s: H2HChallengeView["status"]) {
   if (s === "ACCEPTED") return "var(--accent)";
@@ -115,8 +113,8 @@ function IncomingCard({ c }: { c: H2HChallengeView }) {
         <span className="num text-sm" style={{ color: "var(--accent)" }}>{c.multiplier.toFixed(2)}x</span>
       </div>
       <div className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
-        Your stake if accepted: <span className="num font-bold">{fmt(c.stake)}</span>
-        {" · "}Pot: <span className="num font-bold" style={{ color: "var(--gold)" }}>{fmt(c.stake * 2)}</span>
+        Your stake if accepted: <span className="num font-bold">{fmtMoney(c.stake)}</span>
+        {" · "}Pot: <span className="num font-bold" style={{ color: "var(--gold)" }}>{fmtMoney(c.stake * 2)}</span>
       </div>
       {err && <div className="mb-2 text-xs rounded px-2 py-1" style={{ background: "rgba(255,77,94,0.12)", color: "var(--live)" }}>{err}</div>}
       <div className="flex gap-2">
@@ -128,7 +126,7 @@ function IncomingCard({ c }: { c: H2HChallengeView }) {
         <button onClick={() => respond(true)} disabled={busy}
           className="flex-1 rounded-xl py-2 text-sm font-extrabold transition-opacity disabled:opacity-50"
           style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
-          {busy ? "…" : `Accept · Lock ${fmt(c.stake)}`}
+          {busy ? "…" : `Accept · Lock ${fmtMoney(c.stake)}`}
         </button>
       </div>
     </div>
@@ -159,7 +157,7 @@ function PendingCard({ c }: { c: H2HChallengeView }) {
         <span className="num text-sm" style={{ color: "var(--accent)" }}>{c.multiplier.toFixed(2)}x</span>
       </div>
       <div className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
-        Your stake locked: <span className="num font-bold" style={{ color: "var(--gold)" }}>{fmt(c.stake)}</span>
+        Your stake locked: <span className="num font-bold" style={{ color: "var(--gold)" }}>{fmtMoney(c.stake)}</span>
         {" · "}Awaiting response
       </div>
       {err && <div className="mb-2 text-xs rounded px-2 py-1" style={{ background: "rgba(255,77,94,0.12)", color: "var(--live)" }}>{err}</div>}
@@ -186,8 +184,8 @@ function ActiveCard({ c, userId }: { c: H2HChallengeView; userId: string }) {
         {!isCreator && <span className="text-xs" style={{ color: "var(--text-3)" }}>(their pick — you took the other side)</span>}
       </div>
       <div className="flex gap-4 text-xs">
-        <span style={{ color: "var(--text-3)" }}>Your stake <span className="num font-bold" style={{ color: "var(--text)" }}>{fmt(c.stake)}</span></span>
-        <span style={{ color: "var(--text-3)" }}>Pot <span className="num font-bold" style={{ color: "var(--gold)" }}>{fmt(c.stake * 2)}</span></span>
+        <span style={{ color: "var(--text-3)" }}>Your stake <span className="num font-bold" style={{ color: "var(--text)" }}>{fmtMoney(c.stake)}</span></span>
+        <span style={{ color: "var(--text-3)" }}>Pot <span className="num font-bold" style={{ color: "var(--gold)" }}>{fmtMoney(c.stake * 2)}</span></span>
       </div>
       <div className="mt-2 text-xs" style={{ color: "var(--accent)" }}>Settles automatically when the match finishes</div>
     </div>
@@ -212,7 +210,7 @@ function HistoryCard({ c, userId }: { c: H2HChallengeView; userId: string }) {
         <div className="text-sm font-semibold">{c.pickLabel}</div>
       </div>
       <div className="text-right shrink-0">
-        <div className="num text-sm font-bold">{fmt(c.stake)}</div>
+        <div className="num text-sm font-bold">{fmtMoney(c.stake)}</div>
         <div className="text-xs font-bold" style={{ color: tone }}>{result}</div>
       </div>
     </div>

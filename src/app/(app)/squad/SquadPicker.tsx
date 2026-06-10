@@ -7,7 +7,7 @@
 //   • Drag a bench player onto a starter (or vice-versa) to SWAP who starts,
 //     as long as it keeps a valid formation (1 GK; 3–5 DEF; 2–5 MID; 1–3 FWD).
 //   • Tap-to-swap fallback for mobile / no-drag.
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { Flag } from "@/components/Flag";
@@ -16,6 +16,7 @@ import { BudgetBar } from "@/components/BudgetBar";
 import { MiniStore } from "@/components/MiniStore";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import type { PerkLike } from "@/lib/store";
+import { fmtPrice } from "@/lib/format";
 import {
   SQUAD_QUOTA,
   XI_SIZE,
@@ -31,6 +32,7 @@ import {
   type SquadPlayer,
 } from "@/lib/squad-rules";
 import { countryCode } from "@/lib/countries";
+import { buildTemplateSquad } from "@/lib/template-squad";
 import { saveSquad } from "./actions";
 import { toggleFavourite } from "../players/actions";
 
@@ -91,6 +93,26 @@ export function SquadPicker({
   const router = useRouter();
   const byId = useMemo(() => new Map(pool.map((p) => [p.id, p])), [pool]);
 
+  const DRAFT_KEY = `gaffer:squad_draft:${gameweekLabel}`;
+
+  // Read once on mount — seeds state below only when building from scratch (!lockRoster).
+  const [restoredDraft] = useState<{
+    starterIds: string[];
+    benchIds: string[];
+    captainId: string | null;
+    viceId: string | null;
+  } | null>(() => {
+    if (lockRoster) return null;
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(DRAFT_KEY) : null;
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return d?.starterIds?.length > 0 ? d : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [favouriteIds, setFavouriteIds] = useState<Set<string>>(
     () => new Set(initialFavouriteIds),
   );
@@ -113,17 +135,23 @@ export function SquadPicker({
   }
 
   const [squad, setSquad] = useState<SquadEntry[]>(() => {
+    const starterIds = restoredDraft?.starterIds ?? initialStarterIds;
+    const benchIds   = restoredDraft?.benchIds   ?? initialBenchIds;
     const make = (id: string, isStarting: boolean): SquadEntry | null => {
       const p = byId.get(id);
       return p ? { ...p, isStarting } : null;
     };
     return [
-      ...initialStarterIds.map((id) => make(id, true)),
-      ...initialBenchIds.map((id) => make(id, false)),
+      ...starterIds.map((id) => make(id, true)),
+      ...benchIds.map((id) => make(id, false)),
     ].filter((e): e is SquadEntry => !!e);
   });
-  const [captainId, setCaptainId] = useState<string | null>(initialCaptainId);
-  const [viceId, setViceId] = useState<string | null>(initialViceId);
+  const [captainId, setCaptainId] = useState<string | null>(
+    restoredDraft?.captainId ?? initialCaptainId,
+  );
+  const [viceId, setViceId] = useState<string | null>(
+    restoredDraft?.viceId ?? initialViceId,
+  );
   // The roster can be edited on the first-ever pick, or in a knockout transfer
   // window (where every NEW player counts as one transfer).
   const canEditRoster = !lockRoster || transferMode;
@@ -144,6 +172,28 @@ export function SquadPicker({
   const [selectedFormation, setSelectedFormation] = useState(
     () => formationName(squad.filter((p) => p.isStarting)) ?? DEFAULT_FORMATION,
   );
+
+  // Auto-dismiss the "draft restored" banner after 4 s.
+  const [showDraftBanner, setShowDraftBanner] = useState(restoredDraft !== null);
+  useEffect(() => {
+    if (!showDraftBanner) return;
+    const t = setTimeout(() => setShowDraftBanner(false), 4000);
+    return () => clearTimeout(t);
+  }, [showDraftBanner]);
+
+  // Persist draft to localStorage on every state change (skip when roster is locked).
+  useEffect(() => {
+    if (lockRoster || squad.length === 0) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        starterIds: squad.filter((p) => p.isStarting).map((p) => p.id),
+        benchIds:   squad.filter((p) => !p.isStarting).map((p) => p.id),
+        captainId,
+        viceId,
+      }));
+    } catch { /* storage unavailable */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [squad, captainId, viceId]);
 
   function applyFormation(f: string) {
     const split = splitStartingXI(squad, f);
@@ -286,6 +336,30 @@ export function SquadPicker({
     setSubSourceId(id);
   }
 
+  function loadTemplate() {
+    const ids = buildTemplateSquad(pool);
+    if (ids.length === 0) {
+      setMessage("Couldn't build a suggested squad — try picking manually.");
+      return;
+    }
+    const players = ids.map((id) => byId.get(id)).filter(Boolean) as PickerPlayer[];
+    const split = splitStartingXI(players, "4-3-3");
+    if (!split) return;
+    const newSquad: SquadEntry[] = [
+      ...split.starters.map((p) => ({ ...p, isStarting: true })),
+      ...split.bench.map((p) => ({ ...p, isStarting: false })),
+    ];
+    // Auto-set captain/vice to the two most expensive attacking starters
+    const attackers = split.starters
+      .filter((p) => p.position === "FWD" || p.position === "MID")
+      .sort((a, b) => b.price - a.price);
+    setSquad(newSquad);
+    setCaptainId(attackers[0]?.id ?? null);
+    setViceId(attackers[1]?.id ?? null);
+    setSelectedFormation("4-3-3");
+    setMessage(null);
+  }
+
   async function handleSave() {
     setMessage(null);
     if (!formationOk) {
@@ -311,6 +385,7 @@ export function SquadPicker({
         viceId,
       });
       if (res.ok) {
+        try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
         router.push("/team");
         router.refresh();
       } else {
@@ -426,6 +501,32 @@ export function SquadPicker({
             : "Now you can use money you made from betting to strengthen your squad."
         }
       />
+
+      {!lockRoster && squad.length === 0 && (
+        <div className="banner open" style={{ marginTop: 12 }}>
+          <div className="banner-l">
+            <div className="banner-ico">
+              <Icon name="bolt" size={20} style={{ color: "var(--accent)" }} />
+            </div>
+            <div>
+              <h4>Not sure where to start?</h4>
+              <p>Load a suggested squad — balanced, within budget, fully customisable.</p>
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={loadTemplate}>
+            Suggest a squad
+          </button>
+        </div>
+      )}
+
+      {showDraftBanner && (
+        <div className="valid-msgs" style={{ marginTop: 12 }}>
+          <div className="vmsg ok">
+            <span className="ic"><Icon name="check" size={16} /></span>
+            Draft restored — your last session is back.
+          </div>
+        </div>
+      )}
 
       {validation.errors.map((e, i) => (
         <div className="valid-msgs" style={{ marginTop: i === 0 ? 12 : 8 }} key={i}>
@@ -714,7 +815,7 @@ function PlayerActionMenu({
               <span className={"pos pos-" + player.position}>{player.position}</span>
               <Flag country={player.country} size={13} round />
               <span className="muted">{player.country.replace(/-/g, " ")}</span>
-              <span className="muted dim">£{(player.price / 10).toFixed(1)}m</span>
+              <span className="muted dim">{fmtPrice(player.price)}</span>
             </div>
           </div>
         </div>
@@ -829,6 +930,10 @@ function PlayerToken({
   );
 }
 
+// Row center positions as % of pitch height — tuned to match the flex layout's
+// natural row centers (padding 14px top / 16px bottom on a 300×380 aspect pitch).
+const ROW_TOP: Record<Position, number> = { GK: 15, DEF: 38, MID: 61, FWD: 84 };
+
 function Pitch({
   rows,
   captainId,
@@ -865,38 +970,51 @@ function Pitch({
   return (
     <div className="pitch">
       <PitchBg />
-      <div className="pitch-rows">
-        {POS_ORDER.map((pos) => (
-          <div key={pos} className="pitch-row">
-            {rows[pos].map((slot, i) =>
-              slot.player ? (
-                <PlayerToken
-                  key={slot.player.id}
-                  entry={slot.player}
-                  isCaptain={slot.player.id === captainId}
-                  isVice={slot.player.id === viceId}
-                  onTap={() => onTapPlayer(slot.player!.id)}
-                  onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
-                  isSubSource={slot.player.id === subSourceId}
-                  isSubEligible={subEligibleIds.has(slot.player.id)}
-                  subModeActive={subSourceId !== null}
-                  draggedRef={draggedRef}
-                  isDragging={draggingId === slot.player.id}
-                  isDragOver={dragOverId === slot.player.id}
-                  onDragStarted={() => onDragStart(slot.player!.id)}
-                  onDragEnded={onDragEnd}
-                  onDragEntered={() => onDragEnter(slot.player!.id)}
-                  onDragLeft={onDragLeave}
-                />
-              ) : (
-                <button key={pos + i} className="slot slot-empty" onClick={() => onEmpty(pos)}>
-                  <span className="slot-plus"><Icon name="plus" size={22} stroke={2} /></span>
-                  <span className={"slot-pos pos pos-" + pos}>{pos}</span>
-                </button>
-              ),
-            )}
-          </div>
-        ))}
+      {/* Flat absolute layer — every token is a direct child keyed by player ID so
+          React never unmounts/remounts on formation change; only top/left update,
+          which CSS transitions animate. */}
+      <div className="pitch-tokens">
+        {POS_ORDER.flatMap((pos) => {
+          const slots = rows[pos];
+          const n = slots.length;
+          return slots.map((slot, i) => {
+            const top  = ROW_TOP[pos];
+            const left = ((i + 1) / (n + 1)) * 100;
+            const key  = slot.player ? slot.player.id : `${pos}-empty-${i}`;
+            return (
+              <div
+                key={key}
+                className="pitch-token-pos"
+                style={{ top: `${top}%`, left: `${left}%` }}
+              >
+                {slot.player ? (
+                  <PlayerToken
+                    entry={slot.player}
+                    isCaptain={slot.player.id === captainId}
+                    isVice={slot.player.id === viceId}
+                    onTap={() => onTapPlayer(slot.player!.id)}
+                    onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
+                    isSubSource={slot.player.id === subSourceId}
+                    isSubEligible={subEligibleIds.has(slot.player.id)}
+                    subModeActive={subSourceId !== null}
+                    draggedRef={draggedRef}
+                    isDragging={draggingId === slot.player.id}
+                    isDragOver={dragOverId === slot.player.id}
+                    onDragStarted={() => onDragStart(slot.player!.id)}
+                    onDragEnded={onDragEnd}
+                    onDragEntered={() => onDragEnter(slot.player!.id)}
+                    onDragLeft={onDragLeave}
+                  />
+                ) : (
+                  <button className="slot slot-empty" onClick={() => onEmpty(pos)}>
+                    <span className="slot-plus"><Icon name="plus" size={22} stroke={2} /></span>
+                    <span className={"slot-pos pos pos-" + pos}>{pos}</span>
+                  </button>
+                )}
+              </div>
+            );
+          });
+        })}
       </div>
     </div>
   );
@@ -1200,7 +1318,7 @@ function PickerModal({
         </div>
         <div className="picker">
           <div className="picker-bar">
-            <span className="pill pill-blue">£{(remaining / 10).toFixed(1)}m to spend</span>
+            <span className="pill pill-blue">{fmtPrice(remaining)} to spend</span>
             <span className="muted" style={{ fontSize: 13 }}>{quotaLeft} {position} slot{quotaLeft === 1 ? "" : "s"} left</span>
           </div>
 
@@ -1227,7 +1345,7 @@ function PickerModal({
             </div>
             <div className="filter-row">
               <label className="filter-price">
-                Max £{(maxPrice / 10).toFixed(1)}m
+                Max {fmtPrice(maxPrice)}
                 <input
                   type="range"
                   min={40}

@@ -129,3 +129,15 @@
 .vmsg.err { background: rgba(255,77,94,.12); color: #ff8b96; border: 1px solid rgba(255,77,94,.28); }
 .vmsg.ok { background: rgba(24,224,138,.10); color: var(--accent); border: 1px solid rgba(24,224,138,.24); }
 .vmsg .ic { display:flex; flex:0 0 auto; }
+
+/* nav / tab notification badge */
+.nav-badge {
+  position: absolute; top: -4px; right: -6px;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  border-radius: 999px;
+  background: var(--live); color: #fff;
+  font-size: 9px; font-weight: 900; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--bg);
+  pointer-events: none;
+}

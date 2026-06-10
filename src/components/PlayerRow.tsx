@@ -6,6 +6,7 @@
 import type { PlayerView, Position } from "@/lib/players";
 import { Flag } from "./Flag";
 import { Spark } from "./Spark";
+import { fmtMoney } from "@/lib/format";
 
 // Position badge tint (design uses .pos-GK/.pos-DEF/... ; inlined with tokens).
 const POS_STYLE: Record<Position, { bg: string; fg: string }> = {
@@ -85,7 +86,7 @@ export function PlayerRow({
       </div>
 
       <div className="num min-w-[50px] text-right text-[15px] font-extrabold">
-        £{p.price.toFixed(1)}
+        {fmtMoney(p.price * 1_000_000)}
       </div>
 
       {variant === "market" && onFavourite !== undefined && (

@@ -133,7 +133,7 @@ function gameweekLabel(roundType: string, label: string): string {
 }
 
 // ── the expensive, cacheable global computation (no per-user view) ──
-interface ComputedBoards {
+export interface ComputedBoards {
   totalManagers: number;
   gameweekLabel: string;
   hasPrevGameweek: boolean;
@@ -248,7 +248,7 @@ async function computeBoards(gameweekId: string): Promise<ComputedBoards> {
 }
 
 // 60s cache, keyed by gameweekId — global lists are the same for everyone.
-function cachedBoards(gameweekId: string): Promise<ComputedBoards> {
+export function cachedBoards(gameweekId: string): Promise<ComputedBoards> {
   return unstable_cache(() => computeBoards(gameweekId), ["global-leaderboard", gameweekId], {
     revalidate: 60,
     tags: ["leaderboard"],
@@ -337,3 +337,4 @@ function stripFound(v: BoardView & { found: LeaderboardRow | null }): BoardView 
   void _found;
   return rest;
 }
+

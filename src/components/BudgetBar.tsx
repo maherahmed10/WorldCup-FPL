@@ -1,6 +1,7 @@
 // Budget bar ported from design/components.jsx.
 // spent & remaining are in TENTHS of a million (matches Player.price / BUDGET).
 import { BUDGET } from "@/lib/squad-rules";
+import { fmtPrice } from "@/lib/format";
 
 export function BudgetBar({
   spent,
@@ -29,14 +30,14 @@ export function BudgetBar({
             <div className="bb-fill" style={{ width: pct + "%" }} />
           </div>
           <div className="bb-track-labels">
-            <span className="muted">£{(spent / 10).toFixed(1)}m spent</span>
-            <span className="muted">£{(effectiveBudget / 10).toFixed(1)}m budget</span>
+            <span className="muted">{fmtPrice(spent)} spent</span>
+            <span className="muted">{fmtPrice(effectiveBudget)} budget</span>
           </div>
         </div>
         <div className="bb-stat right">
           <div className="bb-label">{over ? "Over by" : "Remaining"}</div>
           <div className={"bb-val num " + (over ? "neg" : "pos")}>
-            £{(Math.abs(remaining) / 10).toFixed(1)}m
+            {fmtPrice(Math.abs(remaining))}
           </div>
         </div>
       </div>
