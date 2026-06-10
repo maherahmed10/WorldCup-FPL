@@ -346,7 +346,9 @@ export function SquadPicker({
 
   function applyBestLineup(players: PickerPlayer[]) {
     const candidates = Object.keys(FORMATIONS);
-    let best: { formation: string; split: ReturnType<typeof splitStartingXI>; starterValue: number } | null = null;
+    let best:
+      | { formation: string; split: NonNullable<ReturnType<typeof splitStartingXI<PickerPlayer>>>; starterValue: number }
+      | null = null;
 
     for (const formation of candidates) {
       const split = splitStartingXI(players, formation);

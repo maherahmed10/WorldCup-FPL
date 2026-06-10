@@ -45,7 +45,7 @@ export default function SettingsPage() {
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>Account</div>
             <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>
-              Sign out of GAFFER on this device
+              Sign out of TapIn on this device
             </div>
           </div>
           <button
