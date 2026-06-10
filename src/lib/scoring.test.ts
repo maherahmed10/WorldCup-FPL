@@ -3,7 +3,7 @@
 // before any feed is wired.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { scoreMatch, scoreSquadGameweek, resolveCaptain, breakdownMatch, eventPoints, type MatchStatLine } from "./scoring.js";
+import { scoreMatch, scoreSquadGameweek, resolveCaptain, resolveCaptains, breakdownMatch, eventPoints, type MatchStatLine } from "./scoring.js";
 
 const base: MatchStatLine = {
   position: "MID",
@@ -72,6 +72,35 @@ test("captain doubles in squad total", () => {
   ];
   assert.equal(scoreSquadGameweek(starters, "a"), 25); // 10*2 + 5
   assert.equal(scoreSquadGameweek(starters, null), 15);
+});
+
+test("two captains both double (Extra Captain perk)", () => {
+  const starters = [
+    { playerId: "a", points: 10 },
+    { playerId: "b", points: 5 },
+    { playerId: "c", points: 3 },
+  ];
+  // a + b both captained → 10*2 + 5*2 + 3 = 33
+  assert.equal(scoreSquadGameweek(starters, ["a", "b"]), 33);
+  assert.equal(scoreSquadGameweek(starters, new Set(["a", "b"])), 33);
+});
+
+test("resolveCaptains: primary + 2nd captain, vice rule on primary only", () => {
+  // primary played, 2nd captain set → both armbands
+  assert.deepEqual(
+    resolveCaptains("cap", "vice", "cap2", { cap: 90, cap2: 90 }),
+    new Set(["cap", "cap2"]),
+  );
+  // primary DNP → vice takes primary's ×2, 2nd captain still doubles
+  assert.deepEqual(
+    resolveCaptains("cap", "vice", "cap2", { cap: 0, vice: 90, cap2: 90 }),
+    new Set(["vice", "cap2"]),
+  );
+  // no 2nd captain → single armband
+  assert.deepEqual(
+    resolveCaptains("cap", "vice", null, { cap: 90 }),
+    new Set(["cap"]),
+  );
 });
 
 test("resolveCaptain: captain played → captain wears armband", () => {

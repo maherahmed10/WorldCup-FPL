@@ -9,7 +9,7 @@ import {
   getPickForEdit,
   getKnockoutTransferAllowance,
 } from "@/lib/squad-data";
-import { getMaxPerCountry, type PerkLike } from "@/lib/store";
+import { getMaxPerCountry, hasActivePerk, type PerkLike } from "@/lib/store";
 import { BUDGET, totalPrice } from "@/lib/squad-rules";
 import { ensureKnockoutBudgetMerged, knockoutFunds } from "@/lib/budget-merge";
 import { SquadPicker, type PickerPlayer } from "./SquadPicker";
@@ -66,6 +66,22 @@ export default async function SquadPage() {
   const lockRoster = existing !== null;
   const pick = await getPickForEdit(user.id, sourceGameweekId);
 
+  // Extra Captain perk → the user can name a SECOND captain (both score ×2). The
+  // perk binds to the GW it's used in, so the 2nd captain is seeded only from the
+  // EDITABLE GW's own pick (not carried forward from a prior round). The UI stays
+  // available if an unused perk exists OR this round's pick already has a 2nd
+  // captain (perk already spent here — must remain editable).
+  const ownPick = gameweek
+    ? await db.gameweekPick.findUnique({
+        where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
+        select: { captain2Id: true },
+      })
+    : null;
+  const initialCaptain2Id = ownPick?.captain2Id ?? null;
+  const hasExtraCaptain =
+    !!gameweek &&
+    (hasActivePerk(perks, "extra_captain", gameweek.id) || initialCaptain2Id !== null);
+
   // One-pool budget: in the knockouts the squad cap = current squad spend + the
   // whole bank, so budgetBonus is derived (cap − £100M) rather than a stored
   // conversion. In the group stage it's the flat £100M (legacy bonus honoured).
@@ -99,6 +115,8 @@ export default async function SquadPage() {
         initialBenchIds={existing?.players.filter((p) => !p.isStarting).map((p) => p.id) ?? []}
         initialCaptainId={pick?.captainId ?? existing?.captainId ?? null}
         initialViceId={pick?.viceId ?? null}
+        initialCaptain2Id={initialCaptain2Id}
+        hasExtraCaptain={hasExtraCaptain}
         maxPerCountry={maxPerCountry}
         balance={bettingBalance}
         budgetBonus={budgetBonus}

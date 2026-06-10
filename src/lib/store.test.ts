@@ -6,7 +6,6 @@ import {
   canAffordPerk,
   hasActivePerk,
   getMaxPerCountry,
-  getCaptainMultiplier,
   type PerkLike,
 } from "./store.js";
 
@@ -33,22 +32,15 @@ test("getMaxPerCountry: always returns 3 (country_slot removed from catalogue)",
   assert.equal(getMaxPerCountry(legacy), 3);
 });
 
-// ── extra captain perk ──────────────────────────────────────────────────────
+// ── extra captain perk (lets you name a 2nd captain — bound to its GW) ───────
 
-test("getCaptainMultiplier: returns 2 without perk, 3 with extra_captain for matching GW", () => {
-  assert.equal(getCaptainMultiplier([], "gw1"), 2);
-
-  const withPerk: PerkLike[] = [
-    { storeItemId: "perk_extra_captain", gameweekId: "gw1", usedAt: null },
-  ];
-  assert.equal(getCaptainMultiplier(withPerk, "gw1"), 3);
-});
-
-test("getCaptainMultiplier: perk for gw1 does NOT apply in gw2 (expires after its GW)", () => {
+test("hasActivePerk: extra_captain active for its GW, not another", () => {
   const perks: PerkLike[] = [
     { storeItemId: "perk_extra_captain", gameweekId: "gw1", usedAt: null },
   ];
-  assert.equal(getCaptainMultiplier(perks, "gw2"), 2);
+  assert.equal(hasActivePerk(perks, "extra_captain", "gw1"), true);
+  assert.equal(hasActivePerk(perks, "extra_captain", "gw2"), false);
+  assert.equal(hasActivePerk([], "extra_captain", "gw1"), false);
 });
 
 // ── hasActivePerk general ───────────────────────────────────────────────────

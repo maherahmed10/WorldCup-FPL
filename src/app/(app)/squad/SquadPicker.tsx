@@ -59,6 +59,8 @@ export function SquadPicker({
   initialBenchIds,
   initialCaptainId,
   initialViceId,
+  initialCaptain2Id = null,
+  hasExtraCaptain = false,
   maxPerCountry = 3,
   balance = 1000,
   budgetBonus = 0,
@@ -76,6 +78,8 @@ export function SquadPicker({
   initialBenchIds: string[];
   initialCaptainId: string | null;
   initialViceId: string | null;
+  initialCaptain2Id?: string | null; // second captain saved for this GW (if any)
+  hasExtraCaptain?: boolean; // Extra Captain perk active → can assign a 2nd captain
   maxPerCountry?: number;
   balance?: number;
   budgetBonus?: number;
@@ -152,6 +156,8 @@ export function SquadPicker({
   const [viceId, setViceId] = useState<string | null>(
     restoredDraft?.viceId ?? initialViceId,
   );
+  // Second captain (Extra Captain perk) — also scores ×2.
+  const [captain2Id, setCaptain2Id] = useState<string | null>(initialCaptain2Id);
   // The roster can be edited on the first-ever pick, or in a knockout transfer
   // window (where every NEW player counts as one transfer).
   const canEditRoster = !lockRoster || transferMode;
@@ -267,6 +273,7 @@ export function SquadPicker({
     setSquad((prev) => prev.filter((p) => p.id !== id));
     if (captainId === id) setCaptainId(null);
     if (viceId === id) setViceId(null);
+    if (captain2Id === id) setCaptain2Id(null);
   }
 
   // Swap a starter and a bench player (the sub). Returns whether it happened.
@@ -281,9 +288,10 @@ export function SquadPicker({
       return false;
     }
     setMessage(null);
-    // If the captain/vice gets benched by this swap, clear that role.
+    // If the captain/vice/2nd-captain gets benched by this swap, clear that role.
     if (captainId === starter.id) setCaptainId(null);
     if (viceId === starter.id) setViceId(null);
+    if (captain2Id === starter.id) setCaptain2Id(null);
     setSquad((prev) =>
       prev.map((p) =>
         p.id === starter.id ? { ...p, isStarting: false } : p.id === reserve.id ? { ...p, isStarting: true } : p,
@@ -383,6 +391,7 @@ export function SquadPicker({
         benchIds: bench.map((p) => p.id),
         captainId,
         viceId,
+        captain2Id: hasExtraCaptain ? captain2Id : null,
       });
       if (res.ok) {
         try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
@@ -671,6 +680,7 @@ export function SquadPicker({
               rows={pitchRows}
               captainId={captainId}
               viceId={viceId}
+              captain2Id={captain2Id}
               onEmpty={(pos) => { if (canEditRoster) setPickerFor({ pos, starter: true }); }}
               onTapPlayer={handleTokenTap}
               onSwap={trySwap}
@@ -710,6 +720,8 @@ export function SquadPicker({
             squad={squad}
             captainId={captainId}
             viceId={viceId}
+            captain2Id={hasExtraCaptain ? captain2Id : null}
+            hasExtraCaptain={hasExtraCaptain}
             countryCounts={countryCounts}
             maxPerCountry={maxPerCountry}
             transferMode={transferMode}
@@ -751,11 +763,29 @@ export function SquadPicker({
             player={p}
             isCaptain={captainId === p.id}
             isVice={viceId === p.id}
+            isCaptain2={captain2Id === p.id}
+            showCaptain2={hasExtraCaptain && p.isStarting}
             canRemove={canEditRoster}
             removeLabel={transferMode ? "Transfer out" : "Remove from squad"}
             onViewProfile={() => { setProfileId(p.id); close(); }}
-            onCaptain={() => { setCaptainId(p.id); if (viceId === p.id) setViceId(null); close(); }}
-            onVice={() => { setViceId(p.id); if (captainId === p.id) setCaptainId(null); close(); }}
+            onCaptain={() => {
+              setCaptainId(p.id);
+              if (viceId === p.id) setViceId(null);
+              if (captain2Id === p.id) setCaptain2Id(null);
+              close();
+            }}
+            onVice={() => {
+              setViceId(p.id);
+              if (captainId === p.id) setCaptainId(null);
+              if (captain2Id === p.id) setCaptain2Id(null);
+              close();
+            }}
+            onCaptain2={() => {
+              setCaptain2Id(p.id);
+              if (captainId === p.id) setCaptainId(null);
+              if (viceId === p.id) setViceId(null);
+              close();
+            }}
             onSubstitute={() => { startSubstitute(p.id); close(); }}
             onRemove={() => { removePlayer(p.id); close(); }}
             onClose={close}
@@ -777,11 +807,14 @@ function PlayerActionMenu({
   player,
   isCaptain,
   isVice,
+  isCaptain2,
+  showCaptain2,
   canRemove,
   removeLabel = "Remove from squad",
   onViewProfile,
   onCaptain,
   onVice,
+  onCaptain2,
   onSubstitute,
   onRemove,
   onClose,
@@ -789,11 +822,14 @@ function PlayerActionMenu({
   player: SquadEntry;
   isCaptain: boolean;
   isVice: boolean;
+  isCaptain2: boolean;
+  showCaptain2: boolean; // Extra Captain perk active + this player can start
   canRemove: boolean;
   removeLabel?: string;
   onViewProfile: () => void;
   onCaptain: () => void;
   onVice: () => void;
+  onCaptain2: () => void;
   onSubstitute: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -822,6 +858,9 @@ function PlayerActionMenu({
         <div className="act-list">
           <Item icon="eye" label="View full profile" onClick={onViewProfile} />
           <Item icon="star" label={isCaptain ? "Captain (×2) — selected" : "Make Captain (×2)"} onClick={onCaptain} />
+          {showCaptain2 && (
+            <Item icon="star" label={isCaptain2 ? "2nd Captain (×2) — selected" : "Make 2nd Captain (×2)"} onClick={onCaptain2} />
+          )}
           <Item icon="user" label={isVice ? "Vice-captain — selected" : "Make Vice-captain"} onClick={onVice} />
           <Item icon="swap" label="Substitute" onClick={onSubstitute} />
           {canRemove && (
@@ -842,6 +881,7 @@ function PlayerToken({
   entry,
   isCaptain,
   isVice,
+  isCaptain2 = false,
   onTap,
   onDropSwap,
   isSubSource = false,
@@ -858,6 +898,7 @@ function PlayerToken({
   entry: SquadEntry;
   isCaptain: boolean;
   isVice: boolean;
+  isCaptain2?: boolean; // second captain (Extra Captain perk) — shows a C badge too
   onTap: () => void;
   onDropSwap: (draggedId: string) => void;
   isSubSource?: boolean; // the player being substituted (pick-mode)
@@ -920,8 +961,8 @@ function PlayerToken({
       role="button"
       title={`${entry.name} — tap for options`}
     >
-      {isCaptain && <span className="cap-badge">C</span>}
-      {isVice && !isCaptain && <span className="cap-badge vice">V</span>}
+      {(isCaptain || isCaptain2) && <span className="cap-badge">C</span>}
+      {isVice && !isCaptain && !isCaptain2 && <span className="cap-badge vice">V</span>}
       <div className="slot-jersey"><Jersey country={entry.country} size={46} /></div>
       <div className="slot-flag"><Flag country={entry.country} size={13} round /></div>
       <div className="slot-name">{lastName(entry.name)}</div>
@@ -938,6 +979,7 @@ function Pitch({
   rows,
   captainId,
   viceId,
+  captain2Id,
   onEmpty,
   onTapPlayer,
   onSwap,
@@ -954,6 +996,7 @@ function Pitch({
   rows: Record<Position, PitchSlot[]>;
   captainId: string | null;
   viceId: string | null;
+  captain2Id: string | null;
   onEmpty: (pos: Position) => void;
   onTapPlayer: (id: string) => void;
   onSwap: (aId: string, bId: string) => boolean;
@@ -992,6 +1035,7 @@ function Pitch({
                     entry={slot.player}
                     isCaptain={slot.player.id === captainId}
                     isVice={slot.player.id === viceId}
+                    isCaptain2={slot.player.id === captain2Id}
                     onTap={() => onTapPlayer(slot.player!.id)}
                     onDropSwap={(draggedId) => onSwap(draggedId, slot.player!.id)}
                     isSubSource={slot.player.id === subSourceId}
@@ -1163,6 +1207,8 @@ function SquadSummary({
   squad,
   captainId,
   viceId,
+  captain2Id = null,
+  hasExtraCaptain = false,
   countryCounts,
   maxPerCountry,
   transferMode = false,
@@ -1172,6 +1218,8 @@ function SquadSummary({
   squad: SquadEntry[];
   captainId: string | null;
   viceId: string | null;
+  captain2Id?: string | null; // second captain (Extra Captain perk)
+  hasExtraCaptain?: boolean;
   countryCounts: Record<string, number>;
   maxPerCountry: number;
   transferMode?: boolean;
@@ -1180,6 +1228,7 @@ function SquadSummary({
 }) {
   const captain = squad.find((p) => p.id === captainId) ?? null;
   const vice = squad.find((p) => p.id === viceId) ?? null;
+  const captain2 = captain2Id ? squad.find((p) => p.id === captain2Id) ?? null : null;
   const entries = Object.entries(countryCounts).sort((a, b) => b[1] - a[1]);
   return (
     <div className="card" style={{ padding: 16 }}>
@@ -1215,6 +1264,20 @@ function SquadSummary({
           <span className="dim">Not set</span>
         )}
       </div>
+      {hasExtraCaptain && (
+        <div className="sum-row">
+          <span className="muted">2nd Captain</span>
+          {captain2 ? (
+            <span className="sum-cap">
+              <Flag country={captain2.country} size={14} round />
+              <b>{lastName(captain2.name)}</b>
+              <span className="pill pill-gold">×2</span>
+            </span>
+          ) : (
+            <span className="dim">Not set</span>
+          )}
+        </div>
+      )}
       <div className="sum-row">
         <span className="muted">Vice-captain</span>
         {vice ? (
@@ -1227,7 +1290,9 @@ function SquadSummary({
         )}
       </div>
       <p className="sum-hint" style={{ marginTop: 6 }}>
-        Tap a starting player → <b>Make Captain</b> / <b>Make Vice-captain</b>. Both required to save.
+        Tap a starting player → <b>Make Captain</b> / <b>Make Vice-captain</b>.
+        {hasExtraCaptain && <> Your <b>Extra Captain</b> perk lets you name a 2nd captain — both score ×2.</>}
+        {" "}Captain & vice required to save.
       </p>
       <div className="sum-divider" />
       <div className="sum-title">Country quota</div>

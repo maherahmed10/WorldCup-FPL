@@ -299,11 +299,12 @@ model SquadPlayer {
 // reads this per gameweek: captain scores ×2, or the vice does if the captain
 // played 0 minutes. Editable until Gameweek.deadline (first kickoff of the GW).
 model GameweekPick {
-  id         String @id @default(cuid())
-  userId     String @db.Uuid
+  id         String  @id @default(cuid())
+  userId     String  @db.Uuid
   gameweekId String
   captainId  String // Player.id — scores ×2
   viceId     String // Player.id — scores ×2 if the captain doesn't play
+  captain2Id String? // Player.id — SECOND captain (also ×2), only with the Extra Captain perk
 
   user     User     @relation(fields: [userId], references: [id])
   gameweek Gameweek @relation(fields: [gameweekId], references: [id])

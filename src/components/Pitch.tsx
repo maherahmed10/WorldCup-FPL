@@ -55,7 +55,7 @@ function Token({
   onClick,
 }: {
   slot: Slot;
-  isCaptain?: boolean;
+  isCaptain?: boolean; // captain OR 2nd captain — both wear C and score ×2
   isVice?: boolean;
   gwPts?: number;
   mode: "view" | "pick";
@@ -99,6 +99,7 @@ export function Pitch({
   rows,
   captainId,
   viceId,
+  captain2Id,
   mode = "view",
   gwPoints,
   onSlot,
@@ -108,6 +109,7 @@ export function Pitch({
   rows: Record<Position, Slot[]>;
   captainId?: string | null;
   viceId?: string | null;
+  captain2Id?: string | null; // second captain (Extra Captain perk) — also C / ×2
   mode?: "view" | "pick";
   gwPoints?: Record<string, number>;
   onSlot?: (position: Position, index: number, player: PitchPlayer | null) => void;
@@ -124,8 +126,8 @@ export function Pitch({
               <Token
                 key={pos + i}
                 slot={slot}
-                isCaptain={!!slot.player && slot.player.id === captainId}
-                isVice={!!slot.player && slot.player.id === viceId}
+                isCaptain={!!slot.player && (slot.player.id === captainId || slot.player.id === captain2Id)}
+                isVice={!!slot.player && slot.player.id === viceId && slot.player.id !== captain2Id}
                 gwPts={slot.player && gwPoints ? gwPoints[slot.player.id] ?? 0 : undefined}
                 mode={mode}
                 onClick={() => onSlot?.(pos, i, slot.player)}

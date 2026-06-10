@@ -13,7 +13,7 @@ export const STORE_ITEMS = [
   {
     id: "perk_extra_captain",
     name: "Extra Captain",
-    description: "Your captain scores triple points for one gameweek.",
+    description: "Name a SECOND captain for one gameweek — both captains score double.",
     cost: 2_500_000,
     effectKey: "extra_captain" as const,
   },
@@ -73,9 +73,4 @@ export function hasActivePerk(
 /** Max players per country: always 3 (country_slot perk removed from catalogue). */
 export function getMaxPerCountry(_perks: PerkLike[]): number {
   return 3;
-}
-
-/** Captain multiplier for a gameweek: 2 normally, 3 with extra_captain perk. */
-export function getCaptainMultiplier(perks: PerkLike[], gameweekId: string): number {
-  return hasActivePerk(perks, "extra_captain", gameweekId) ? 3 : 2;
 }

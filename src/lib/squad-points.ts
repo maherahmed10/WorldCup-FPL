@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { db } from "@/lib/db";
-import { scoreSquadGameweek, resolveCaptain } from "@/lib/scoring";
+import { scoreSquadGameweek, resolveCaptains } from "@/lib/scoring";
 
 /**
  * Per-player gameweek points: map of playerId → summed fantasyPoints across that
@@ -59,12 +59,13 @@ export function squadGameweekTotal(
   points: Record<string, number>,
   viceId: string | null = null,
   minutes: Record<string, number> = {},
+  captain2Id: string | null = null, // second captain (Extra Captain perk) — also ×2
 ): number {
   const starters = players
     .filter((p) => p.isStarting)
     .map((p) => ({ playerId: p.id, points: points[p.id] ?? 0 }));
-  const effectiveCaptain = resolveCaptain(captainId, viceId, minutes);
-  return scoreSquadGameweek(starters, effectiveCaptain);
+  const captains = resolveCaptains(captainId, viceId, captain2Id, minutes);
+  return scoreSquadGameweek(starters, captains);
 }
 
 /**
@@ -79,7 +80,7 @@ export async function getUserSeasonTotal(userId: string): Promise<number> {
   });
   const picks = await db.gameweekPick.findMany({
     where: { userId },
-    select: { gameweekId: true, captainId: true, viceId: true },
+    select: { gameweekId: true, captainId: true, viceId: true, captain2Id: true },
   });
   const pickByGw = new Map(picks.map((p) => [p.gameweekId, p]));
 
@@ -97,6 +98,7 @@ export async function getUserSeasonTotal(userId: string): Promise<number> {
       points,
       pick?.viceId ?? null,
       minutes,
+      pick?.captain2Id ?? null,
     );
   }
   return total;

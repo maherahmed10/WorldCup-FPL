@@ -13,11 +13,13 @@ export function TeamPitch({
   rows,
   captainId,
   viceId,
+  captain2Id,
   gwPoints,
 }: {
   rows: Record<Position, Slot[]>;
   captainId?: string | null;
   viceId?: string | null;
+  captain2Id?: string | null;
   gwPoints?: Record<string, number>;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -28,6 +30,7 @@ export function TeamPitch({
         rows={rows}
         captainId={captainId}
         viceId={viceId}
+        captain2Id={captain2Id}
         mode="view"
         gwPoints={gwPoints}
         onSlot={(_pos, _i, player: PitchPlayer | null) => {
