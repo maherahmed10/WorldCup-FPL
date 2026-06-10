@@ -29,9 +29,8 @@ export default async function LoginPage() {
               width={260}
               height={260}
               priority
-              // Badge has a solid black bg; `screen` drops it so only the logo
-              // shows over the dark hero gradient (no visible square seam).
-              style={{ objectFit: "contain", width: "auto", height: "clamp(150px, 24vh, 240px)", mixBlendMode: "screen" }}
+              // Badge background is transparent now, so it blends on any surface.
+              style={{ objectFit: "contain", width: "auto", height: "clamp(150px, 24vh, 240px)" }}
             />
           </div>
           <h1 className="auth-title">
