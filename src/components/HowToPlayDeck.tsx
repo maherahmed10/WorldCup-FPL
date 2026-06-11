@@ -8,6 +8,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import {
+  DraftDemo,
+  TransfersDemo,
+  ScoutDemo,
+  LeaguesDemo,
+  BetsDemo,
+  PowerupsDemo,
+} from "@/components/tutorial/Demos";
 
 interface Card {
   n: string;
@@ -17,6 +25,7 @@ interface Card {
   title: string;
   text: string;
   chips: string[];
+  demo: React.ReactNode; // looping animated preview shown beside the text (.htp-media)
 }
 
 const HTP_CARDS: Card[] = [
@@ -25,36 +34,42 @@ const HTP_CARDS: Card[] = [
     title: "Draft your squad",
     text: "Assemble a 15-player squad — 2 GK, 5 DEF, 5 MID, 3 FWD — inside a £100m budget. Pick a formation and hand the armband to a captain who banks double points.",
     chips: ["15 players", "£100m budget", "Max 3 / nation", "Captain ×2"],
+    demo: <DraftDemo />,
   },
   {
     n: "02", icon: "swap", cc: "var(--blue)", kicker: "Adapt",
     title: "Make transfers",
-    text: "Your squad locks through the group stage. Then one transfer window opens at the start of every knockout round — refresh your team as the field narrows.",
-    chips: ["R32", "R16", "QF", "SF", "Final"],
+    text: "Your squad locks through the group stage. From the knockouts on you get transfers each round to refresh your team — and any you don't use roll over. Buy and sell right on your team, paid for from your bank.",
+    chips: ["3 per round", "Unused roll over", "R32 → Final"],
+    demo: <TransfersDemo />,
   },
   {
     n: "03", icon: "search", cc: "var(--purple)", kicker: "Scout",
     title: "Search & scout players",
     text: "Browse the full player market. Filter by position, nation, price and form, then tap any player for their profile, season stats and upcoming fixtures.",
     chips: ["Filter by form", "Price & value", "Full profiles"],
+    demo: <ScoutDemo />,
   },
   {
     n: "04", icon: "trophy", cc: "var(--gold)", kicker: "Compete",
     title: "Leagues & friends",
     text: "Spin up a mini-league to get a join code, invite your mates, and scrap up the table on gameweek and total points all tournament long.",
     chips: ["Join codes", "Invite friends", "Live standings"],
+    demo: <LeaguesDemo />,
   },
   {
     n: "05", icon: "coins", cc: "var(--live)", kicker: "Predict",
     title: "Bet on matches",
     text: "Stake your virtual bank on match markets — result, over/under, both teams to score — plus player props like anytime scorer, to assist or to be carded. Win = stake × odds.",
     chips: ["Match result", "Over / under", "BTTS", "Player props"],
+    demo: <BetsDemo />,
   },
   {
     n: "06", icon: "store", cc: "var(--accent)", kicker: "Boost",
     title: "Buy power-ups",
-    text: "Spend your winnings in the Store on one-shot perks that swing a gameweek your way when it matters most.",
-    chips: ["+1 nation slot", "Triple-captain", "Extra transfer", "Bench boost", "Wildcard"],
+    text: "Spend your betting winnings in the Store on one-shot perks that swing a gameweek your way — name a second captain, grab an extra transfer, or boost your bench.",
+    chips: ["Extra Captain", "Extra Transfer", "Bench Boost"],
+    demo: <PowerupsDemo />,
   },
 ];
 
@@ -124,22 +139,27 @@ export function HowToPlayDeck({
               aria-hidden={i !== index}
             >
               <div className="htp-num">{c.n}</div>
-              <div className="htp-badge"><Icon name={c.icon} size={26} /></div>
-              <div className="htp-kicker">{c.kicker}</div>
-              <h3 className="htp-title">{c.title}</h3>
-              <p className="htp-text">{c.text}</p>
-              <div className="htp-chips">
-                {c.chips.map((chip) => (
-                  <span key={chip} className="htp-chip">{chip}</span>
-                ))}
-              </div>
-              {i === total - 1 && finalCta && (
-                <div className="htp-cta">
-                  <Link className="btn" href={finalCta.href}>
-                    {finalCta.label} <Icon name="arrowright" size={17} />
-                  </Link>
+              {/* text column */}
+              <div className="htp-body">
+                <div className="htp-badge"><Icon name={c.icon} size={26} /></div>
+                <div className="htp-kicker">{c.kicker}</div>
+                <h3 className="htp-title">{c.title}</h3>
+                <p className="htp-text">{c.text}</p>
+                <div className="htp-chips">
+                  {c.chips.map((chip) => (
+                    <span key={chip} className="htp-chip">{chip}</span>
+                  ))}
                 </div>
-              )}
+                {i === total - 1 && finalCta && (
+                  <div className="htp-cta">
+                    <Link className="btn" href={finalCta.href}>
+                      {finalCta.label} <Icon name="arrowright" size={17} />
+                    </Link>
+                  </div>
+                )}
+              </div>
+              {/* animated preview — beside text on desktop, stacked on mobile/modal */}
+              <div className="htp-media">{c.demo}</div>
             </article>
           );
         })}

@@ -97,10 +97,11 @@ export default async function TeamPage() {
   // displayed squad came from (carries forward with the team).
   const pick = await db.gameweekPick.findUnique({
     where: { userId_gameweekId: { userId: user.id, gameweekId: squadGwId } },
-    select: { captainId: true, viceId: true },
+    select: { captainId: true, viceId: true, captain2Id: true },
   });
   const captainId = pick?.captainId ?? squad.captainId;
   const viceId = pick?.viceId ?? null;
+  const captain2Id = pick?.captain2Id ?? null;
 
   // Injury warnings — captain first, then other starters.
   const captainPlayer = squad.players.find((p) => p.id === captainId);
@@ -117,7 +118,7 @@ export default async function TeamPage() {
     squad.players.map((p) => p.id),
     gameweek!.id,
   );
-  const gwTotal = squadGameweekTotal(squad.players, captainId, gwPoints, viceId, gwMinutes);
+  const gwTotal = squadGameweekTotal(squad.players, captainId, gwPoints, viceId, gwMinutes, captain2Id);
   const seasonTotal = await getUserSeasonTotal(user.id);
 
   // Store data for mini store panel
@@ -334,7 +335,7 @@ export default async function TeamPage() {
       <div className="two-col" style={{ marginTop: 16 }}>
         <div>
           <div className="pitch-wrap">
-            <TeamPitch rows={rows} captainId={captainId} viceId={viceId} gwPoints={gwPoints} />
+            <TeamPitch rows={rows} captainId={captainId} viceId={viceId} captain2Id={captain2Id} gwPoints={gwPoints} />
           </div>
         </div>
         <div>

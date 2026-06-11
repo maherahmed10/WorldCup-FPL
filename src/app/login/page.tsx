@@ -20,11 +20,18 @@ export default async function LoginPage() {
       {/* ---- hero (desktop) ---- */}
       <div className="auth-hero">
         <div className="auth-hero-content">
-          <div className="brand" style={{ padding: 0, marginBottom: 34 }}>
-            <div className="brand-mark" style={{ background: "transparent", boxShadow: "none" }}>
-              <Image src="/TheLogo.png" alt="TapIn" width={34} height={34} style={{ objectFit: "contain", mixBlendMode: "screen" }} />
-            </div>
-            <div className="brand-name">TapIn</div>
+          {/* Full TapIn Fantasy badge — login page only. Drop the artwork at
+              public/tapin-fantasy.png (square-ish PNG, transparent bg). */}
+          <div style={{ marginBottom: 28 }}>
+            <Image
+              src="/tapin-fantasy.png"
+              alt="TapIn Fantasy — World Cup"
+              width={260}
+              height={260}
+              priority
+              // Badge background is transparent now, so it blends on any surface.
+              style={{ objectFit: "contain", width: "auto", height: "clamp(150px, 24vh, 240px)" }}
+            />
           </div>
           <h1 className="auth-title">
             Pick your squad.
@@ -49,10 +56,6 @@ export default async function LoginPage() {
             <div>
               <div className="as-num num">104</div>
               <div className="as-lab">Matches</div>
-            </div>
-            <div>
-              <div className="as-num num">2.4M</div>
-              <div className="as-lab">Managers</div>
             </div>
           </div>
         </div>

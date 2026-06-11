@@ -17,17 +17,17 @@ export interface OwnedPerk {
 // What the user needs to know before buying — shown inline and in the confirm step.
 const ACTIVATION_NOTE: Record<string, string> = {
   extra_captain:
-    "Activates on purchase — your captain scores ×3 for one gameweek. Set your captain from the Squad page before the next kickoff.",
+    "Lets you name a SECOND captain for one gameweek — both captains score ×2. Set it from the Squad page (tap a starter → Make 2nd Captain) before the next kickoff.",
   extra_transfer:
-    "Activates on purchase — grants one extra free transfer. Use it any time from the Transfers page.",
+    "Activates on purchase — grants one extra free transfer. Use it any time from the squad editor.",
   bench_boost:
     "Activates on purchase — your bench players' points count in full for one knockout gameweek.",
 };
 
 // Short hint shown in "Your Perks" so users know where to go next.
 const USAGE_HINT: Record<string, string> = {
-  extra_captain: "Head to Squad → set your captain before kickoff",
-  extra_transfer: "Head to Transfers → make your extra transfer",
+  extra_captain: "Head to Squad → tap a starter → Make 2nd Captain",
+  extra_transfer: "Head to Squad → make your extra transfer",
   bench_boost: "Applies automatically to the current knockout round",
 };
 

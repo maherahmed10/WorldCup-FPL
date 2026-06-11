@@ -4,8 +4,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { squadGameweekTotal } from "./squad-points.js";
+import type { Position } from "./squad-rules.js";
 
-const p = (id: string, isStarting: boolean) => ({ id, isStarting });
+// Default position MID — the small synthetic squads below are NOT a legal 11+4,
+// so the auto-sub engine never fires on them (canSwap needs a valid formation),
+// which keeps these focused on the captain/vice math. Auto-sub behaviour is
+// covered by the full-squad tests at the bottom.
+const p = (id: string, isStarting: boolean, position: Position = "MID") => ({
+  id,
+  position,
+  isStarting,
+});
 
 test("only starters score; bench is ignored", () => {
   const players = [p("a", true), p("b", true), p("c", false)];
@@ -73,4 +82,66 @@ test("no vice given → falls back to captain doubling", () => {
   const points = { cap: 7, x: 3 };
   // no minutes/vice passed → captain doubled: 14 + 3 = 17
   assert.equal(squadGameweekTotal(players, "cap", points), 17);
+});
+
+// ── bench auto-subs (0-minute starter → first eligible bench player) ──
+// A legal 4-3-3 XI + a 4-man bench (GK first, then 3 outfielders).
+function fullSquad() {
+  return [
+    p("gk", true, "GK"),
+    p("d1", true, "DEF"), p("d2", true, "DEF"), p("d3", true, "DEF"), p("d4", true, "DEF"),
+    p("m1", true, "MID"), p("m2", true, "MID"), p("m3", true, "MID"),
+    p("f1", true, "FWD"), p("f2", true, "FWD"), p("f3", true, "FWD"),
+    // bench, left-to-right priority: GK, then 3 outfielders
+    p("bgk", false, "GK"), p("bo1", false, "DEF"), p("bo2", false, "MID"), p("bo3", false, "FWD"),
+  ];
+}
+// All 15 played 90 unless overridden.
+const allPlayed = () =>
+  Object.fromEntries(fullSquad().map((x) => [x.id, 90])) as Record<string, number>;
+
+test("auto-sub: a starter who played 0 min is replaced by the first eligible bench player", () => {
+  const players = fullSquad();
+  const minutes = { ...allPlayed(), m2: 0 }; // a midfielder didn't play
+  // Bench order is bgk, bo1(DEF), bo2(MID), bo3(FWD). For a MID out, bgk(GK) is
+  // ineligible (2 GKs), but bo1(DEF) IS eligible — 4-3-3 → 5-2-3 is a valid
+  // shape — so bo1 comes in FIRST (left-to-right), even though bo2 is like-for-like.
+  const points = { m2: 0, bo1: 4, bo2: 7 };
+  assert.equal(squadGameweekTotal(players, null, points, null, minutes), 4); // bo1, not bo2
+});
+
+test("auto-sub: first eligible bench player (left→right) is chosen", () => {
+  const players = fullSquad();
+  const minutes = { ...allPlayed(), f1: 0, bo1: 90, bo2: 90, bo3: 90 };
+  // f1 (FWD) out. Bench order is bgk, bo1(DEF), bo2(MID), bo3(FWD).
+  // Replacing a FWD with a DEF (bo1) → 4-3-3 becomes 5-3-2, an allowed shape, so
+  // bo1 is taken FIRST even though bo3 is a like-for-like FWD. Give them distinct
+  // points so we can tell which came in.
+  const points = { f1: 0, bo1: 4, bo2: 5, bo3: 9 };
+  assert.equal(squadGameweekTotal(players, null, points, null, minutes), 4); // bo1, not bo3
+});
+
+test("auto-sub: GK is only replaced by the bench GK", () => {
+  const players = fullSquad();
+  const minutes = { ...allPlayed(), gk: 0, bgk: 90 };
+  const points = { gk: 0, bgk: 6, bo1: 3, bo2: 3, bo3: 3 };
+  // gk out → bench GK in for 6 (an outfielder can't fill the GK slot).
+  assert.equal(squadGameweekTotal(players, null, points, null, minutes), 6);
+});
+
+test("auto-sub: no sub when no eligible bench player played", () => {
+  const players = fullSquad();
+  const minutes = { ...allPlayed(), m1: 0, bgk: 0, bo1: 0, bo2: 0, bo3: 0 };
+  const points = { m1: 0, bo2: 9 }; // bench MID scored but DNP → ineligible
+  assert.equal(squadGameweekTotal(players, null, points, null, minutes), 0);
+});
+
+test("auto-sub: captain who played 0 min → vice ×2, AND the captain is subbed out", () => {
+  const players = fullSquad();
+  const minutes = { ...allPlayed(), f1: 0 };
+  // f1 (captain, FWD) DNP. Vice m1 (played) takes ×2. f1 is subbed out — the
+  // first eligible bench player for a FWD is bo1(DEF) (4-3-3 → 5-3-2), in for 4.
+  const points = { f1: 0, m1: 5, bo1: 4 };
+  // vice m1 ×2 (10) + bo1 (4) = 14.
+  assert.equal(squadGameweekTotal(players, "f1", points, "m1", minutes), 14);
 });

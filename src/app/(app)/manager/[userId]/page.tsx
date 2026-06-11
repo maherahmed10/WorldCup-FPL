@@ -126,16 +126,17 @@ export default async function ManagerPage({
   // with the squad), falling back to the squad's own captain.
   const pick = await db.gameweekPick.findUnique({
     where: { userId_gameweekId: { userId: targetId, gameweekId: view!.gameweekId } },
-    select: { captainId: true, viceId: true },
+    select: { captainId: true, viceId: true, captain2Id: true },
   });
   const captainId = pick?.captainId ?? squad.captainId;
   const viceId = pick?.viceId ?? null;
+  const captain2Id = pick?.captain2Id ?? null;
 
   // Points are for the locked round being shown.
   const ids = squad.players.map((p) => p.id);
   const gwPoints = await getGameweekPlayerPoints(ids, gameweek.id);
   const gwMinutes = await getGameweekMinutes(ids, gameweek.id);
-  const gwTotal = squadGameweekTotal(squad.players, captainId, gwPoints, viceId, gwMinutes);
+  const gwTotal = squadGameweekTotal(squad.players, captainId, gwPoints, viceId, gwMinutes, captain2Id);
   const seasonTotal = await getUserSeasonTotal(targetId);
 
   return (
@@ -162,7 +163,7 @@ export default async function ManagerPage({
       <div className="two-col" style={{ marginTop: 16 }}>
         <div>
           <div className="pitch-wrap">
-            <Pitch rows={rows} captainId={captainId} viceId={viceId} mode="view" gwPoints={gwPoints} />
+            <Pitch rows={rows} captainId={captainId} viceId={viceId} captain2Id={captain2Id} mode="view" gwPoints={gwPoints} />
           </div>
         </div>
         <div>

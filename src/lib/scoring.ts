@@ -127,16 +127,23 @@ export function eventPoints(
 }
 
 /**
- * Gameweek total for a squad: sum starting XI, captain scores ×captainMultiplier.
- * captainMultiplier defaults to 2; pass 3 when the user has the extra_captain perk.
+ * Gameweek total for a squad: sum starting XI; each CAPTAIN scores ×2.
+ * `captainIds` is the set of armband-wearers (1 normally; 2 with the Extra
+ * Captain perk — both ×2). Accepts a single id, an array, or a Set.
  */
 export function scoreSquadGameweek(
   starters: Array<{ playerId: string; points: number }>,
-  captainId: string | null,
+  captainIds: string | string[] | Set<string> | null,
   captainMultiplier = 2,
 ): number {
+  const caps =
+    captainIds == null
+      ? new Set<string>()
+      : captainIds instanceof Set
+        ? captainIds
+        : new Set(Array.isArray(captainIds) ? captainIds : [captainIds]);
   return starters.reduce((total, p) => {
-    const mult = p.playerId === captainId ? captainMultiplier : 1;
+    const mult = caps.has(p.playerId) ? captainMultiplier : 1;
     return total + p.points * mult;
   }, 0);
 }
@@ -155,4 +162,23 @@ export function resolveCaptain(
   if (captainId && (minutes[captainId] ?? 0) > 0) return captainId;
   if (viceId && (minutes[viceId] ?? 0) > 0) return viceId;
   return captainId; // neither played → keep captain (×2 of 0 = 0 anyway)
+}
+
+/**
+ * Resolve all armband-wearers for a gameweek (1 or 2 captains), applying the
+ * vice rule ONLY to the primary captain: if the primary played 0 minutes the
+ * vice takes its ×2. A second captain (Extra Captain perk) doubles on its own —
+ * if it doesn't play, ×2 of 0 = 0, same as any starter. Returns a Set of ids.
+ */
+export function resolveCaptains(
+  captainId: string | null,
+  viceId: string | null,
+  captain2Id: string | null,
+  minutes: Record<string, number>,
+): Set<string> {
+  const out = new Set<string>();
+  const primary = resolveCaptain(captainId, viceId, minutes);
+  if (primary) out.add(primary);
+  if (captain2Id) out.add(captain2Id);
+  return out;
 }

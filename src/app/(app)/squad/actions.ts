@@ -29,6 +29,7 @@ export interface SavePayload {
   benchIds: string[]; // 4 bench player ids
   captainId: string | null;
   viceId: string | null;
+  captain2Id?: string | null; // second captain — only honoured with the Extra Captain perk
 }
 
 export async function saveSquad(payload: SavePayload) {
@@ -169,6 +170,34 @@ export async function saveSquad(payload: SavePayload) {
   if (!starters.has(viceId)) return { ok: false, error: "Vice-captain must be in your starting 11." };
   if (captainId === viceId) return { ok: false, error: "Captain and vice-captain must be different players." };
 
+  // Second captain (Extra Captain perk). Allowed when the perk is active for this
+  // gameweek, OR when this GW's pick ALREADY has a 2nd captain (perk already spent
+  // on this round — re-saving must not lose it). Must be a different starter than
+  // the captain. Server re-checks so the client can't grant itself a free double.
+  let captain2Id: string | null = payload.captain2Id ?? null;
+  if (captain2Id) {
+    const [perks, priorPick] = await Promise.all([
+      db.userPerk.findMany({
+        where: { userId: user.id, storeItemId: "perk_extra_captain", usedAt: null },
+        select: { gameweekId: true },
+      }),
+      db.gameweekPick.findUnique({
+        where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
+        select: { captain2Id: true },
+      }),
+    ]);
+    const unusedPerkAvailable = perks.some((p) => p.gameweekId === null || p.gameweekId === gameweek.id);
+    const alreadyPaidThisRound = priorPick?.captain2Id != null;
+    if (!unusedPerkAvailable && !alreadyPaidThisRound) {
+      // No active Extra Captain perk → silently drop the 2nd captain (don't block save).
+      captain2Id = null;
+    } else if (!starters.has(captain2Id)) {
+      return { ok: false, error: "Your second captain must be in your starting 11." };
+    } else if (captain2Id === captainId || captain2Id === viceId) {
+      return { ok: false, error: "Your second captain must be a different player from your captain and vice." };
+    }
+  }
+
   // Upsert the squad for this user+gameweek, replacing its players. One
   // transaction with the transfer money/perk effects so a failure can't charge
   // the bank without saving the team (or vice versa).
@@ -219,12 +248,33 @@ export async function saveSquad(payload: SavePayload) {
       });
     }
 
-    // The per-gameweek captain + vice (this is what settlement reads).
+    // The per-gameweek captain + vice + optional 2nd captain (settlement reads this).
+    const existingPick = await tx.gameweekPick.findUnique({
+      where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
+      select: { captain2Id: true },
+    });
     await tx.gameweekPick.upsert({
       where: { userId_gameweekId: { userId: user.id, gameweekId: gameweek.id } },
-      update: { captainId, viceId },
-      create: { userId: user.id, gameweekId: gameweek.id, captainId, viceId },
+      update: { captainId, viceId, captain2Id },
+      create: { userId: user.id, gameweekId: gameweek.id, captainId, viceId, captain2Id },
     });
+
+    // Consume one Extra Captain perk the FIRST time a 2nd captain is set for this
+    // GW (binding it to this GW). Re-saving the same GW (already had a captain2)
+    // doesn't re-consume; clearing the 2nd captain doesn't refund.
+    const firstTimeUsingCaptain2 = captain2Id && !existingPick?.captain2Id;
+    if (firstTimeUsingCaptain2) {
+      const perk = await tx.userPerk.findFirst({
+        where: { userId: user.id, storeItemId: "perk_extra_captain", usedAt: null },
+        select: { id: true },
+      });
+      if (perk) {
+        await tx.userPerk.update({
+          where: { id: perk.id },
+          data: { usedAt: new Date(), gameweekId: gameweek.id },
+        });
+      }
+    }
   });
 
   revalidatePath("/team");

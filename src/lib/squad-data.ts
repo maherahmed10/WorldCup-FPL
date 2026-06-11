@@ -158,11 +158,11 @@ export async function getSquadForEdit(
 export async function getPickForEdit(
   userId: string,
   sourceGameweekId: string | null,
-): Promise<{ captainId: string | null; viceId: string | null } | null> {
+): Promise<{ captainId: string | null; viceId: string | null; captain2Id: string | null } | null> {
   if (!sourceGameweekId) return null;
   return db.gameweekPick.findUnique({
     where: { userId_gameweekId: { userId, gameweekId: sourceGameweekId } },
-    select: { captainId: true, viceId: true },
+    select: { captainId: true, viceId: true, captain2Id: true },
   });
 }
 

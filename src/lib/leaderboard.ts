@@ -82,12 +82,12 @@ async function userGameweek(
     getGameweekMinutes(ids, gameweekId),
     db.gameweekPick.findUnique({
       where: { userId_gameweekId: { userId, gameweekId } },
-      select: { captainId: true, viceId: true },
+      select: { captainId: true, viceId: true, captain2Id: true },
     }),
   ]);
   const captainId = pick?.captainId ?? squad.captainId;
   const viceId = pick?.viceId ?? null;
-  const pts = squadGameweekTotal(squad.players, captainId, points, viceId, minutes);
+  const pts = squadGameweekTotal(squad.players, captainId, points, viceId, minutes, pick?.captain2Id ?? null);
   // Manager "country" = captain's nation → most-picked nation in the squad →
   // (tie) alphabetical → null. User has no nationality field; derived from data.
   const country = deriveCountry(squad.players, captainId);
