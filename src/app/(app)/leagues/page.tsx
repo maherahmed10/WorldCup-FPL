@@ -19,7 +19,7 @@ interface SquadRow {
   captainId: string | null;
   players: SquadPlayerRow[];
 }
-interface MemberUserRow { name: string; squads: SquadRow[] }
+interface MemberUserRow { name: string; supportedNation: string | null; squads: SquadRow[] }
 interface MemberRow { userId: string; user: MemberUserRow }
 interface LeagueRow {
   id: string;
@@ -98,6 +98,7 @@ export default async function LeaguesPage() {
         const rawMembers = league.members.map((m: MemberRow) => ({
           userId: m.userId,
           name: m.user.name,
+          country: m.user.supportedNation ?? null, // Nations pick → flag; null = no flag
           totalPoints: computePoints(m.user.squads),
           gwPoints: computePoints(m.user.squads, true),
         }));

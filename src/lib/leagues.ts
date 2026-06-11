@@ -42,6 +42,7 @@ export interface LeagueStandingRow {
   name: string;
   gwPoints: number;
   totalPoints: number;
+  country?: string | null; // the nation picked in Nations (User.supportedNation); null = no flag
 }
 
 /** Sort fantasy league standings: total points → GW points as tiebreaker. */

@@ -3,6 +3,7 @@
 import { useActionState, useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { Flag } from "@/components/Flag";
 import { createLeague, joinLeague, type ActionResult } from "@/app/(app)/leagues/actions";
 
 // ── Types (serialisable — passed from server component) ─────────────────────
@@ -10,6 +11,7 @@ import { createLeague, joinLeague, type ActionResult } from "@/app/(app)/leagues
 export interface LeagueMemberRow {
   userId: string;
   name: string;
+  country?: string | null; // nation picked in Nations → flag; null/absent = no flag
   gwPoints: number;
   totalPoints: number;
   rank: number; // 1-based standings position (ties share a rank)
@@ -310,9 +312,9 @@ function StandingsTable({
                     >
                       {row.name[0]?.toUpperCase()}
                     </div>
-                    <span className="truncate text-sm font-medium">
-                      {row.rank === 1 && (
-                        <span className="mr-1" style={{ fontSize: 13 }}>👑</span>
+                    <span className="truncate text-sm font-medium" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {row.country && (
+                        <Flag country={row.country} size={15} round />
                       )}
                       {row.name}
                       {isYou && (
