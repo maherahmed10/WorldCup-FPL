@@ -12,6 +12,16 @@
 
 import type { RoundType } from "@prisma/client";
 
+// The squad/transfer deadline sits this long BEFORE the first kickoff of the
+// gameweek (FPL convention). For Group MD1 this is 90 min before the first game
+// of the group stage. Applied wherever a deadline is derived from kickoffs.
+export const DEADLINE_LEAD_MS = 90 * 60 * 1000; // 1h30m
+
+/** Deadline for a gameweek given its earliest fixture kickoff. */
+export function deadlineForFirstKickoff(firstKickoff: Date): Date {
+  return new Date(firstKickoff.getTime() - DEADLINE_LEAD_MS);
+}
+
 export interface GameweekDef {
   label: string;
   roundType: RoundType;

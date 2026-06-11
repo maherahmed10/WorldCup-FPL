@@ -33,12 +33,30 @@ import {
   scorerMultiplier,
   assistMultiplier,
 } from "../src/lib/betting";
+import { GAMEWEEK_DEFS, DEADLINE_LEAD_MS } from "../src/lib/gameweeks";
 
 // How far to pull a simulated gameweek's dates into the PAST so the app's
 // date-based gates (deadline lock, rival-squad unlock, banner advance, transfer
 // window) behave as if the matches really happened. Reset shifts back by the
 // same amount. Guarded so re-running sim without reset never double-shifts.
 const BACKDATE_MS = 120 * 24 * 60 * 60 * 1000; // 120 days
+
+// Snap a (possibly multiply-backdated) kickoff back into its gameweek's real
+// calendar window by adding the unique k·120d that lands it inside. Robust to
+// fixtures that were backdated more than once — unlike a single fixed shift.
+// Returns the original date if no k in [0, 5] fits (already correct / unknown).
+function unBackdate(kickoff: Date, label: string): Date {
+  const def = GAMEWEEK_DEFS.find((g) => g.label === label);
+  if (!def) return kickoff;
+  const pad = 2 * 24 * 60 * 60 * 1000; // absorb late-UTC kickoffs
+  const lo = new Date(`${def.startsAt}T00:00:00Z`).getTime() - pad;
+  const hi = new Date(`${def.endsAt}T23:59:59Z`).getTime() + pad;
+  for (let k = 0; k <= 5; k++) {
+    const t = kickoff.getTime() + k * BACKDATE_MS;
+    if (t >= lo && t <= hi) return new Date(t);
+  }
+  return kickoff;
+}
 
 // ── seeded RNG (mulberry32) ──────────────────────────────────────────────
 function rng(seed: number) {
@@ -441,23 +459,32 @@ async function resetGameweek(label: string, hard: boolean) {
   await db.matchLineup.deleteMany({ where: { fixtureId: { in: fixtureIds } } });
   await db.playerMatchStat.deleteMany({ where: { fixtureId: { in: fixtureIds } } });
 
-  // 2) fixtures back to SCHEDULED + un-backdate kickoffs (shift forward by the
-  //    same amount the sim shifted them back). Guard: only shift fixtures that
-  //    look backdated (kickoff sits in the far past), so reset is idempotent.
+  // 2) fixtures back to SCHEDULED + un-backdate kickoffs by snapping each into
+  //    its gameweek's real calendar window. Robust to multiply-backdated dates
+  //    and idempotent (already-correct kickoffs snap to themselves).
   await db.fixture.updateMany({ where: { id: { in: fixtureIds } }, data: { status: "SCHEDULED", homeScore: null, awayScore: null } });
-  const cutoff = new Date(Date.now() - BACKDATE_MS + 14 * 24 * 60 * 60 * 1000); // backdated → before this
-  const backdatedFx = await db.fixture.findMany({ where: { id: { in: fixtureIds }, kickoff: { lt: cutoff } }, select: { id: true, kickoff: true } });
-  for (const f of backdatedFx) {
-    await db.fixture.update({ where: { id: f.id }, data: { kickoff: new Date(f.kickoff.getTime() + BACKDATE_MS) } });
+  const fx = await db.fixture.findMany({ where: { id: { in: fixtureIds } }, select: { id: true, kickoff: true } });
+  let earliest: Date | null = null;
+  let latest: Date | null = null;
+  for (const f of fx) {
+    const fixed = unBackdate(f.kickoff, label);
+    if (fixed.getTime() !== f.kickoff.getTime()) {
+      await db.fixture.update({ where: { id: f.id }, data: { kickoff: fixed } });
+    }
+    if (!earliest || fixed < earliest) earliest = fixed;
+    if (!latest || fixed > latest) latest = fixed;
   }
-  // un-backdate the gameweek window (deadline + startsAt + endsAt) if it was shifted
-  if (gw.deadline < cutoff) {
+  // restore the gameweek window from the canonical calendar + corrected kickoffs
+  const def = GAMEWEEK_DEFS.find((g) => g.label === label);
+  if (def && earliest && latest) {
+    const startsAt = new Date(`${def.startsAt}T00:00:00Z`);
+    const canonicalEnd = new Date(`${def.endsAt}T23:59:59Z`);
     await db.gameweek.update({
       where: { id: gw.id },
       data: {
-        deadline: new Date(gw.deadline.getTime() + BACKDATE_MS),
-        startsAt: new Date(gw.startsAt.getTime() + BACKDATE_MS),
-        endsAt: new Date(gw.endsAt.getTime() + BACKDATE_MS),
+        startsAt,
+        endsAt: latest > canonicalEnd ? latest : canonicalEnd,
+        deadline: new Date(earliest.getTime() - DEADLINE_LEAD_MS),
       },
     });
   }

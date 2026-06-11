@@ -21,6 +21,7 @@ import {
 import {
   GAMEWEEK_DEFS,
   bucketForKickoff,
+  deadlineForFirstKickoff,
 } from "@/lib/gameweeks";
 import type { Position } from "@prisma/client";
 
@@ -114,9 +115,12 @@ export async function syncFixtures() {
     synced++;
   }
 
-  // Set each gameweek deadline to its first kickoff.
-  for (const [label, deadline] of earliestByGw) {
-    await db.gameweek.update({ where: { id: label }, data: { deadline } });
+  // Set each gameweek deadline to 90 min before its first kickoff.
+  for (const [label, firstKickoff] of earliestByGw) {
+    await db.gameweek.update({
+      where: { id: label },
+      data: { deadline: deadlineForFirstKickoff(firstKickoff) },
+    });
   }
   console.log(`✓ fixtures: ${synced} (of ${fixtures.length} returned)`);
 }
