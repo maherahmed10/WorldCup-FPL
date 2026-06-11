@@ -1,0 +1,57 @@
+# Scheduled data jobs — replaces Vercel Cron so we can stay on the free Hobby
+# plan (Hobby caps crons at once/day). GitHub Actions pings the /api/cron/*
+# endpoints on a schedule; each route is guarded by CRON_SECRET.
+#
+# Setup (one-time): in the GitHub repo → Settings → Secrets and variables →
+# Actions, add two repository secrets:
+#   APP_URL      = https://<your-app>.vercel.app   (no trailing slash)
+#   CRON_SECRET  = <same value set in Vercel env>
+#
+# Schedules are UTC and mirror the old vercel.json. GitHub may delay a run by a
+# few minutes under load, and disables schedules after 60 days of repo
+# inactivity — fine for this, but see README note if you need hard guarantees.
+
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "0 5,17 * * *"            # sync   — fixtures/standings/odds, 2×/day
+    - cron: "0 */4 * * *"             # odds   — refresh betting odds, every 4h
+    - cron: "30 1,5,9,13,17,21 * * *" # settle — settle finished bets, 6×/day
+  workflow_dispatch:                  # manual "Run workflow" button (runs sync)
+
+# Don't pile up runs if one is slow.
+concurrency:
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync (fixtures + standings + odds)
+        if: github.event.schedule == '0 5,17 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -fsS --max-time 300 -X GET "$APP_URL/api/cron/sync" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Odds (refresh)
+        if: github.event.schedule == '0 */4 * * *'
+        run: |
+          curl -fsS --max-time 300 -X GET "$APP_URL/api/cron/odds" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Settle (finished bets)
+        if: github.event.schedule == '30 1,5,9,13,17,21 * * *'
+        run: |
+          curl -fsS --max-time 300 -X GET "$APP_URL/api/cron/settle" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
