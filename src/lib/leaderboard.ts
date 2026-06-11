@@ -69,11 +69,12 @@ export interface GlobalLeaderboard {
   };
 }
 
-// ── per-user gameweek total + their flag (captain's nation) ──
+// ── per-user gameweek total (points only; the flag comes from the user's
+//    chosen Nation, set in computeBoards) ──
 async function userGameweek(
   userId: string,
   gameweekId: string,
-): Promise<{ pts: number; country: string | null } | null> {
+): Promise<{ pts: number } | null> {
   const squad = await getActiveSquad(userId, gameweekId);
   if (!squad) return null;
   const ids = squad.players.map((p) => p.id);
@@ -88,27 +89,7 @@ async function userGameweek(
   const captainId = pick?.captainId ?? squad.captainId;
   const viceId = pick?.viceId ?? null;
   const pts = squadGameweekTotal(squad.players, captainId, points, viceId, minutes, pick?.captain2Id ?? null);
-  // Manager "country" = captain's nation → most-picked nation in the squad →
-  // (tie) alphabetical → null. User has no nationality field; derived from data.
-  const country = deriveCountry(squad.players, captainId);
-  return { pts, country };
-}
-
-/** Captain's nation, else the most-picked nation in the squad (alphabetical tie), else null. */
-function deriveCountry(
-  players: Array<{ id: string; country: string }>,
-  captainId: string | null,
-): string | null {
-  const cap = players.find((p) => p.id === captainId)?.country;
-  if (cap) return cap;
-  const counts = new Map<string, number>();
-  for (const p of players) if (p.country) counts.set(p.country, (counts.get(p.country) ?? 0) + 1);
-  if (counts.size === 0) return null;
-  const max = Math.max(...counts.values());
-  return [...counts.entries()]
-    .filter(([, n]) => n === max)
-    .map(([c]) => c)
-    .sort()[0];
+  return { pts };
 }
 
 /** Standard competition ranking by a single descending score (ties share a rank). */
@@ -165,7 +146,7 @@ async function computeBoards(gameweekId: string): Promise<ComputedBoards> {
   // Every entered user (≥ 1 squad).
   const users = await db.user.findMany({
     where: { squads: { some: {} } },
-    select: { id: true, name: true, teamName: true },
+    select: { id: true, name: true, teamName: true, supportedNation: true },
   });
 
   const base = await Promise.all(
@@ -179,7 +160,9 @@ async function computeBoards(gameweekId: string): Promise<ComputedBoards> {
         userId: u.id,
         managerName: u.name,
         teamName: u.teamName ?? u.name,
-        country: cur?.country ?? null,
+        // Flag = ONLY the nation the manager picked in Nations. No fallback —
+        // no nation chosen → no flag.
+        country: u.supportedNation ?? null,
         currentPts: cur?.pts ?? 0,
         seasonPts: season,
         prevPts: prev?.pts ?? 0,
@@ -309,11 +292,12 @@ export async function getGlobalLeaderboard({
   const meRow = boards.overall.find((r) => r.userId === userId);
   const me = await db.user.findUnique({
     where: { id: userId },
-    select: { name: true, teamName: true },
+    select: { name: true, teamName: true, supportedNation: true },
   });
   const teamName = meRow?.teamName ?? me?.teamName ?? me?.name ?? "My Team";
   const managerName = meRow?.managerName ?? me?.name ?? "You";
-  const country = meRow?.country ?? null;
+  // Flag = ONLY the nation picked in Nations (no nation → no flag).
+  const country = me?.supportedNation ?? null;
 
   return {
     teamName,

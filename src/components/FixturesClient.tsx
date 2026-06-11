@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { sortGroupStandings, type GroupStandings } from "@/lib/leagues";
+import { Icon } from "@/components/Icon";
 
 // Group fixtures into chronological day buckets for the date separators.
 function groupByDay(fixtures: FixtureData[]): Array<{ key: string; label: string; fixtures: FixtureData[] }> {
@@ -101,7 +102,9 @@ export function FixturesClient({ gameweeks, groupStandings }: Props) {
               className="mr-2 rounded-full px-2 py-0.5 text-xs font-semibold"
               style={{ background: "var(--surface-2)" }}
             >
-              {active.fixtures.length} match{active.fixtures.length !== 1 ? "es" : ""}
+              {active.fixtures.length === 0
+                ? active.isKnockout ? "Teams TBD" : "TBD"
+                : `${active.fixtures.length} match${active.fixtures.length !== 1 ? "es" : ""}`}
             </span>
             Deadline:{" "}
             {new Date(active.deadline).toLocaleString("en-GB", {
@@ -117,10 +120,23 @@ export function FixturesClient({ gameweeks, groupStandings }: Props) {
           {/* Fixture list */}
           {active.fixtures.length === 0 ? (
             <div
-              className="rounded-2xl border py-10 text-center text-sm"
-              style={{ background: "var(--surface)", borderColor: "var(--line)", color: "var(--text-3)" }}
+              className="rounded-2xl border px-6 py-10 text-center"
+              style={{ background: "var(--surface)", borderColor: "var(--line)" }}
             >
-              No fixtures scheduled yet for this round.
+              <div
+                className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full"
+                style={{ background: "var(--surface-2)", color: "var(--text-3)" }}
+              >
+                <Icon name={active.isKnockout ? "trophy" : "fixtures"} size={22} />
+              </div>
+              <div className="text-sm font-semibold" style={{ color: "var(--text-2)" }}>
+                {active.isKnockout ? "To be decided" : "No fixtures scheduled yet"}
+              </div>
+              <p className="mx-auto mt-1 max-w-sm text-xs" style={{ color: "var(--text-3)" }}>
+                {active.isKnockout
+                  ? "The teams for this round are set once the previous round is played. Fixtures appear here as soon as they're confirmed."
+                  : "Fixtures for this round haven't been published yet — check back soon."}
+              </p>
             </div>
           ) : (
             <div
