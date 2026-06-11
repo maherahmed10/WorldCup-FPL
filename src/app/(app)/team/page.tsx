@@ -13,6 +13,7 @@ import {
   getCurrentGameweek,
   getUpcomingDeadlineGameweek,
   getViewSquad,
+  getMostRecentSquad,
   toPitchRows,
 } from "@/lib/squad-data";
 import {
@@ -56,8 +57,21 @@ export default async function TeamPage() {
   // show the user's most recent one (so a knockout user who picked in MD1 and
   // never re-saved still has a team). squadGwId tells us where the captain came from.
   const view = gameweek ? await getViewSquad(user.id, gameweek.startsAt) : null;
-  const squad = view?.squad ?? null;
-  const squadGwId = view?.gameweekId ?? gameweek?.id ?? "";
+  let squad = view?.squad ?? null;
+  let squadGwId = view?.gameweekId ?? gameweek?.id ?? "";
+
+  // Owner's own dashboard: a first-ever pick made AFTER the current round's
+  // deadline is saved to the NEXT round (the editable one). getViewSquad never
+  // shows a future squad — that anti-leak rule is for RIVAL views — so it finds
+  // nothing for the scoring round and the user wrongly sees "No squad yet" right
+  // after saving. Fall back to their most recent squad so their own team shows.
+  if (!squad) {
+    const recent = await getMostRecentSquad(user.id);
+    if (recent) {
+      squad = recent.squad;
+      squadGwId = recent.gameweekId;
+    }
+  }
 
   // ---- empty state: no squad yet ----
   if (!squad) {
